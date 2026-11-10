@@ -30,3 +30,5 @@
 - v12: el correo de las 7:00 trae arriba el calendario del mes como cuadrícula (mismos emojis y colores que la app; si es día 25 o más, también el mes siguiente). `calendarioHtml()`/`eventosMes()` en scripts/logica.mjs son espejo de `vistaCal()`/`eventosMes()` de app.js: si cambias uno, cambia el otro.
 
 - v13: 💰 depósitos de nómina ISSSTE en el calendario (app y correo): quincena del 15 (≈ $18,100) y de fin de mes (≈ $21,300), más extras estimados (aguinaldo nov/dic, vale decembrino 8-dic, prima vacacional 15-dic y 31-mar, antigüedad 31-dic y 25-may, bono de Reyes 6-ene, mérito fin de ene/abr/jul/oct). Datos fijos en `QUINCENA`/`EXTRAS_NOMINA` (app.js y scripts/logica.mjs, deben coincidir; fuente: claude/ingresos-nomina.md del proyecto). En el correo van en la agenda de 7 días como "suaves": no disparan un correo por sí solos.
+
+- v14: los 💰 de nómina usan las fechas reales que dio Mario (`QUINCENAS` en app.js y scripts/logica.mjs): 10 y 25 nov, 10 y 17 dic 2026. Se quitaron las fechas estimadas de la v13 (15/fin de mes y extras). Pendiente: Mario pasará las fechas de 2027 y, si quiere, los extras (aguinaldo, vale, etc.).

@@ -56,16 +56,10 @@ export function estadoCup(c, hoy) {
 // ---------- calendario para el correo (espejo de eventosMes()/vistaCal() de ../app.js) ----------
 const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
-// Depósitos de nómina ISSSTE (patrón de los talones; los extras son ESTIMADOS: ajusta aquí si cambian).
-const QUINCENA = [[15, 'Quincena ISSSTE (≈ $18,100)'], ['fin', 'Quincena ISSSTE fin de mes (≈ $21,300)']];
-const EXTRAS_NOMINA = [[11, 13, 'Aguinaldo 1ª mitad (estimado)'], [12, 8, 'Vale decembrino (estimado)'], [12, 15, 'Prima vacacional (estimado)'], [12, 20, 'Aguinaldo 2ª mitad (estimado)'],
-  [12, 31, 'Estímulo por antigüedad (estimado)'], [1, 6, 'Bono de Reyes (estimado)'], [3, 31, 'Prima vacacional (estimado)'], [5, 25, 'Estímulo por antigüedad (estimado)'],
-  [1, 'fin', 'Mérito relevante (estimado)'], [4, 'fin', 'Mérito relevante (estimado)'], [7, 'fin', 'Mérito relevante (estimado)'], [10, 'fin', 'Mérito relevante (estimado)']];
+// Depósitos de nómina ISSSTE: fechas REALES que da Mario (YYYY-MM-DD). Agregar aquí las siguientes cuando las pase.
+const QUINCENAS = ['2026-11-10', '2026-11-25', '2026-12-10', '2026-12-17'];
 function ingresosMes(mk) {
-  const [y, m] = mk.split('-').map(Number), ult = new Date(y, m, 0).getDate(), out = [];
-  for (const [d, txt] of QUINCENA) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
-  for (const [mm, d, txt] of EXTRAS_NOMINA) if (mm === m) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
-  return out;
+  return QUINCENAS.filter(f => f.slice(0, 7) === mk).map(f => ({ date: parse(f), txt: 'Depósito de nómina ISSSTE' }));
 }
 export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = [] }) {
   const ev = {};

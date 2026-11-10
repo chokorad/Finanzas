@@ -106,7 +106,7 @@ ok('el correo AM trae el calendario del mes (y el PM no)', () => {
 ok('nómina: sale en el calendario del correo y no dispara correo por sí sola', () => {
   const am = armarAviso({ pagos }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
   assert.match(am.html, /💰/);                                       // quincena 15 y fin de mes en la cuadrícula
-  assert.match(am.html, /Quincena ISSSTE/);                          // 15-nov entra en "Próximos 7 días"
+  assert.match(am.html, /Depósito de nómina/);                        // 10-nov entra en "Próximos 7 días"
   assert.equal(armarAviso({}, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' }), null);   // solo quincena cerca: no manda correo
   assert.match(armarAviso({}, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' }).asunto, /todo en orden/);
 });
