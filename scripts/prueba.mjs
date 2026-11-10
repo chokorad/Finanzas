@@ -33,7 +33,7 @@ ok('viernes adelanta fin de semana y lunes (vence sáb/lun, aviso corto)', () =>
   const p = [{ nombre: 'Seguro', dia: 16, avisoDias: 0, desde: '2026-11', pagados: [] },   // lunes 16-nov
              { nombre: 'Lejano', dia: 20, avisoDias: 0, desde: '2026-11', pagados: [] }];
   const r = armarAviso({ pagos: p }, { hoy: D(2026, 11, 13), dow: 5, slot: 'am' });   // viernes
-  assert.match(r.html, /Seguro/); assert.doesNotMatch(r.html, /Lejano/); assert.match(r.html, /Fin de semana/);
+  assert.match(r.html, /Seguro/); assert.doesNotMatch(r.html.split('Próximos 7 días')[0], /Lejano/); assert.match(r.html, /Fin de semana/);
   assert.match(armarAviso({ pagos: p }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' }).html, /Seguro/);   // jueves también
 });
 ok('rendimientos: no avisa antes del día 20, sí después; pm no los incluye', () => {
@@ -45,7 +45,7 @@ ok('rendimientos: no avisa antes del día 20, sí después; pm no los incluye', 
   // el mes siguiente el progreso se reinicia solo
   assert.match(armarAviso({ rend }, { hoy: D(2026, 12, 21), dow: 1, slot: 'am' }).html, /llevas 0 de 4/);
   rend[0].progreso = 4;
-  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 25), dow: 3, slot: 'am' }), null);
+  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 23), dow: 3, slot: 'am' }), null);
 });
 ok('cupones: avisa a 7 días y no si está usado', () => {
   const cup = [{ nombre: 'Vuelo', codigo: 'XYZ', vence: '2026-11-16' }, { nombre: 'Usado', vence: '2026-11-16', usado: true }];
@@ -85,5 +85,15 @@ ok('promo con meta: pide activarla; ya activa solo avisa el lunes o cerca del fi
   assert.match(armarAviso({ cup: [activa] }, { hoy: D(2027, 3, 10), dow: 3, slot: 'am' }).html, /Vence en 28/); // a 30 días del fin
   assert.equal(armarAviso({ cup: [{ ...activa, usado: true }] }, { hoy: D(2027, 3, 10), dow: 3, slot: 'am' }), null);
   assert.equal(armarAviso({ cup: [promo] }, { hoy: D(2027, 4, 8), dow: 4, slot: 'am' }), null);              // ya venció
+});
+ok('calendario en el correo: rendimientos, cobros esperados y agenda', () => {
+  const rend = [{ nombre: 'MercadoPago', tipoCond: 'check', condicion: 'Depositar $3,000', diaInicio: 12 }];
+  const cobrar = [{ concepto: 'Batidora', estatus: 'pendiente', desde: '2026-08-07', fechaEsperada: '2026-11-09', monto: 640.55 }];
+  const r = armarAviso({ rend, cobrar }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
+  assert.match(r.html, /Cobros esperados/); assert.match(r.html, /se esperaba HOY/);
+  assert.match(r.html, /Próximos 7 días/); assert.match(r.html, /12 nov/);       // MercadoPago el 12 (en 3 días)
+  const r2 = armarAviso({ rend }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' });
+  assert.match(r2.html, /hoy toca empezar/);
+  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 9), dow: 1, slot: 'pm' }), null);
 });
 console.log('TODAS LAS PRUEBAS PASARON');

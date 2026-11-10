@@ -24,3 +24,5 @@
 - v9: la versión se ve al pie de la app ("Finanzas vN · fecha"). Regla: en cada cambio subir `VERSION` en app.js y `CACHE` en sw.js al mismo número.
 
 - v10: calendario mensual arriba de la pestaña Hoy (solo en pantalla, los correos no cambian). Emojis por tipo: 💳 pago de tarjeta, 🎓 colegiatura (ventana 1–5), 🌱 día de empezar la condición de rendimientos, ⏳ último día del mes para cumplirla, 🎟 vencimiento de cupón, 💵 cobro esperado. Colores: rojo ≤3 días o vencido, ámbar ≤10 días, verde listo. Campos nuevos opcionales: `fechaEsperada` (finanzas_cobrar) y `diaInicio` (finanzas_rend, vacío = día 1).
+
+- v11: el correo de las 7:00 ahora incluye el calendario: "Rendimientos: hoy toca empezar" (día `diaInicio`, o día 1), "Cobros esperados" (`fechaEsperada`, rojo si ya pasó) y "📅 Próximos 7 días" (pagos, rendimientos, cupones y cobros que vienen). Solo turno AM. Lógica en scripts/logica.mjs.

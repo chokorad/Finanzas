@@ -104,6 +104,36 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       items.push({ n: 1, orden: 90 - dias, sec: 'Por cobrar (más de 7 días abierto)', t: `${esc(x.concepto)}${x.deQuien ? ' — ' + esc(x.deQuien) : ''}${x.monto ? ' · ' + MXN(x.monto) : ''} · ${dias} días${x.nota ? '<br><i style="color:#666">' + esc(String(x.nota).slice(0, 160)) + '</i>' : ''}` });
     }
   }
+  if (slot === 'am') {
+    // Calendario en el correo: día de empezar rendimientos, cobros esperados y agenda de 7 días.
+    const ventana = Math.max(diasAlLunes, 0);
+    for (const r of rend) {
+      const e = estadoRend(r, hoy);
+      if (e.tipo === 'ninguna' || e.hecho) continue;
+      const dd = diffDays(dueOf(ymKey(hoy), Number(r.diaInicio) || 1), hoy);
+      if (dd >= 0 && dd <= ventana) items.push({ n: 1, orden: 45 + dd, sec: 'Rendimientos: hoy toca empezar', t: `${esc(r.nombre)} — ${dd === 0 ? 'hoy' : 'en ' + dd + ' día(s)'}: ${esc(r.condicion || 'condición del mes')}` });
+    }
+    for (const x of cobrar.filter(x => x.estatus !== 'cobrado' && x.fechaEsperada)) {
+      const dd = diffDays(parse(x.fechaEsperada), hoy);
+      if (dd > ventana) continue;
+      items.push({ n: dd <= 0 ? 0 : 1, orden: 60 + dd, sec: 'Cobros esperados', t: `${esc(x.concepto)}${x.monto ? ' · ' + MXN(x.monto) : ''} — ${dd < 0 ? 'ya pasó la fecha esperada hace ' + (-dd) + ' día(s)' : dd === 0 ? 'se esperaba HOY' : 'se espera en ' + dd + ' día(s)'}` });
+    }
+    const ag = [];
+    for (let d = 1; d <= 7; d++) {
+      const f = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + d), fk = ymd(f), et = fmtFecha(f);
+      for (const p of pagos.filter(p => p.activo !== false)) {
+        if (ciclos(p, hoy).some(c => c.dd === d) && !items.some(i => i.pago && i.nombre === p.nombre)) ag.push({ d, t: `${et} · 💳 ${esc(p.nombre)}: fecha de pago` });
+      }
+      for (const r of rend) {
+        if ((r.tipoCond || 'ninguna') === 'ninguna' || f.getDate() !== (Number(r.diaInicio) || 1)) continue;
+        if (ymKey(f) === ymKey(hoy) && estadoRend(r, hoy).hecho) continue;
+        ag.push({ d, t: `${et} · 🌱 ${esc(r.nombre)}: empezar ${esc(r.condicion || 'condición del mes')}` });
+      }
+      for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · 🎟 vence ${esc(c.nombre)}` });
+      for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });
+    }
+    for (const g of ag) items.push({ n: 2, orden: 100 + g.d, sec: '📅 Próximos 7 días', t: g.t });
+  }
   const icono = slot === 'am' ? '☀️' : '🌙';
   if (!items.length) {
     if (slot === 'am' && dow === 1) return { asunto: `${icono} Finanzas: todo en orden esta semana ✅`, html: '<p>No hay pendientes urgentes. El sistema de avisos sigue funcionando.</p>', total: 0 };
