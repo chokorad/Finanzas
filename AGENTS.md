@@ -19,7 +19,7 @@ Push to `main` of the GitHub repo; Pages serves the root. The email job needs th
 ## Rules for editing
 - **Two copies of the reminder logic**: `ciclos()`, `estadoRend()`, `estadoCup()` exist in `app.js` (screen) and `scripts/logica.mjs` (emails). Change both together and run `node scripts/prueba.mjs`.
 - Do not rename Firestore fields or collections (`finanzas_pagos`, `finanzas_rend`, `finanzas_cupones`, `finanzas_cobrar`, `finanzas_envios`); existing data depends on them.
-- Bump `CACHE` in `sw.js` after any change to shipped files.
+- Bump `CACHE` in `sw.js` AND `VERSION` in `app.js` (shown at the bottom of the app) to the same number after any change to shipped files.
 - Never write secrets in the repo. `config.js` holds only the public Firebase web config.
 - Do not add Firebase Storage, Cloud Functions or anything that requires the Blaze plan.
 - Keep UI text in Spanish; keep code comments and docs in English (or Spanish where a file already is).

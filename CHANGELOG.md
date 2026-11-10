@@ -20,3 +20,5 @@
 - Files: everything in the repo root and `scripts/`.
 
 - Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.
+
+- v9: la versión se ve al pie de la app ("Finanzas vN · fecha"). Regla: en cada cambio subir `VERSION` en app.js y `CACHE` en sw.js al mismo número.
