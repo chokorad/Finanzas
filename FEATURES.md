@@ -25,3 +25,5 @@
 - Drive token is not persisted; popup may be blocked on some phones — open the app in the browser and allow popups for the site.
 
 - Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.
+
+- Calendario mensual en Hoy (v10): navegación ◀ ▶, día de hoy resaltado, toque en un día muestra el detalle. Lógica en `eventosMes()`/`vistaCal()` de app.js (solo pantalla). Pendiente posible: mostrar también los eventos del calendario en los correos.

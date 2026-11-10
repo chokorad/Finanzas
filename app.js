@@ -59,7 +59,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v9 · 9 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v10 · 9 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [] };
 const cargado = { pagos: false, rend: false };
@@ -135,7 +135,8 @@ function listaHoy(hoy) {
   return out.sort((a, b) => a.nivel - b.nivel || a.orden - b.orden);
 }
 
-function vistaHoy(lista, hoy) {
+function vistaHoy(lista, hoy) { return vistaCal(hoy) + vistaHoyLista(lista, hoy); }
+function vistaHoyLista(lista, hoy) {
   if ((cargado.pagos && !S.pagos.length) && (cargado.rend && !S.rend.length)) {
     return `<div class="vacio">Aún no hay nada cargado.<br><br><button id="btn-seed">Cargar mis datos iniciales</button><br><small>Tarjetas, colegiatura y cuentas de rendimiento.</small></div>`;
   }
@@ -241,6 +242,68 @@ function vistaCobrar(hoy) {
     + (filas || '<div class="vacio">Nada por cobrar. Aquí van reembolsos, cosas que compraste para vender, etc.</div>');
 }
 
+// ---------- calendario (pestaña Hoy) ----------
+let calMes = null, calSel = null;
+const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const DIAS_C = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
+function eventosMes(mk, hoy) {
+  const ev = {}; // 'YYYY-MM-DD' -> [{ico, txt, n}]
+  const add = (date, ico, txt, n) => { const k = ymd(date); (ev[k] = ev[k] || []).push({ ico, txt, n }); };
+  const nivelDd = dd => dd <= 3 ? 'rojo' : dd <= 10 ? 'amb' : 'base';
+  for (const p of S.pagos.filter(p => p.activo !== false)) {
+    if (p.desde && mk < p.desde) continue;
+    const due = dueOf(mk, p.dia), pagado = (p.pagados || []).includes(mk), dd = diffDays(due, hoy);
+    const monto = p.monto ? ' · ' + MXN(p.monto) : '';
+    if (p.diaInicio) {
+      const ini = dueOf(mk, p.diaInicio);
+      add(ini, '🎓', `${p.nombre}: ya puedes pagar (del ${p.diaInicio} al ${p.dia})${monto}${pagado ? ' — ✅ pagado' : ''}`, pagado ? 'ok' : 'amb');
+      add(due, '🎓', `${p.nombre}: ÚLTIMO día para pagar${pagado ? ' — ✅ pagado' : ''}`, pagado ? 'ok' : nivelDd(dd));
+    } else {
+      add(due, '💳', `${p.nombre}: fecha de pago${monto}${pagado ? ' — ✅ pagado' : dd < 0 ? ' — VENCIDO' : ''}`, pagado ? 'ok' : nivelDd(dd));
+    }
+  }
+  const ultimo = new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0);
+  for (const r of S.rend) {
+    const tipo = r.tipoCond || 'ninguna'; if (tipo === 'ninguna') continue;
+    const vigente = mk === ymKey(hoy), e = estadoRend(r, hoy), hecho = vigente && e.hecho;
+    const prog = tipo === 'contador' && vigente ? ` (${e.progreso}/${r.meta || 1})` : '';
+    add(dueOf(mk, Number(r.diaInicio) || 1), '🌱', `${r.nombre}: ${r.condicion || 'condición del mes'}${prog}${hecho ? ' — ✅ listo' : ''}`, hecho ? 'ok' : 'amb');
+    if (!hecho && mk >= ymKey(hoy)) add(ultimo, '⏳', `${r.nombre}: último día del mes para cumplir`, ultimo < hoy ? 'rojo' : nivelDd(diffDays(ultimo, hoy)));
+  }
+  for (const c of S.cup) {
+    if (c.usado || !c.vence || c.vence.slice(0, 7) !== mk) continue;
+    add(parse(c.vence), '🎟', `Vence: ${nomCup(c)}`, nivelDd(diffDays(parse(c.vence), hoy)));
+  }
+  for (const x of S.cobrar) {
+    if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
+    const dd = diffDays(parse(x.fechaEsperada), hoy);
+    add(parse(x.fechaEsperada), '💵', `Cobro esperado: ${x.concepto}${x.monto ? ' · ' + MXN(x.monto) : ''}${dd < 0 ? ' — ya pasó la fecha' : ''}`, dd < 0 ? 'rojo' : 'amb');
+  }
+  return ev;
+}
+function vistaCal(hoy) {
+  const mk = calMes || ymKey(hoy), [y, m] = mk.split('-').map(Number), hk = ymd(hoy);
+  const ev = eventosMes(mk, hoy), nd = new Date(y, m, 0).getDate(), off = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+  const sel = calSel && calSel.slice(0, 7) === mk ? calSel : (mk === ymKey(hoy) ? hk : mk + '-01');
+  let celdas = '<div class="cal-w">lun</div><div class="cal-w">mar</div><div class="cal-w">mié</div><div class="cal-w">jue</div><div class="cal-w">vie</div><div class="cal-w">sáb</div><div class="cal-w">dom</div>' + '<div class="dia dvac"></div>'.repeat(off);
+  for (let d = 1; d <= nd; d++) {
+    const k = `${mk}-${pad(d)}`, es = ev[k] || [];
+    const peor = es.reduce((a, e) => PESO[e.n] > PESO[a] ? e.n : a, 'ok');
+    const cls = es.length ? (peor === 'base' ? '' : peor) : '';
+    const ems = [...new Set(es.map(e => e.ico))].slice(0, 3).join('');
+    celdas += `<div class="dia ${cls} ${k === hk ? 'hoy' : ''} ${k === sel ? 'sel' : ''} ${k < hk ? 'pasado' : ''}" data-act="cal-dia" data-d="${k}"><b>${d}</b><span class="ems">${ems}</span></div>`;
+  }
+  const fs = parse(sel), lista = ev[sel] || [];
+  const detalle = `<div class="t" style="margin:10px 0 2px">${DIAS_C[fs.getDay()]} ${fs.getDate()} de ${MESES_L[fs.getMonth()]}${sel === hk ? ' · <span class="tag amb">HOY</span>' : ''}</div>`
+    + (lista.length ? lista.map(e => `<div class="cal-ev ${e.n}">${e.ico} ${esc(e.txt)}</div>`).join('') : '<small class="mute">Nada ese día.</small>');
+  return `<div class="cal"><div class="cal-h"><button class="sec chico" data-act="cal-prev">◀</button>
+    <div><span class="t" style="text-transform:capitalize">${MESES_L[m - 1]} ${y}</span> ${mk !== ymKey(hoy) ? '<button class="sec chico" data-act="cal-hoy">Hoy</button>' : ''}</div>
+    <button class="sec chico" data-act="cal-next">▶</button></div>
+    <div class="cal-g">${celdas}</div>${detalle}
+    <div class="leyenda">💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo</div></div>`;
+}
+
 // ---------- modal / formularios ----------
 function cerrar() { $('#modal').hidden = true; $('#hoja').innerHTML = ''; }
 $('#modal').addEventListener('click', e => { if (e.target.id === 'modal') cerrar(); });
@@ -312,6 +375,7 @@ function formRend(r) {
       { k: 'tipoCond', label: 'Condición mensual', type: 'select', opts: [['check', 'Una cosa que hacer (casilla)'], ['contador', 'Varias veces (contador)'], ['ninguna', 'Sin condición']] },
       { k: 'meta', label: 'Si es contador: cuántas veces', type: 'number' },
       { k: 'condicion', label: 'Qué hay que hacer (texto)', type: 'textarea' },
+      { k: 'diaInicio', label: 'Día del mes para empezar/hacerlo (sale en el calendario; vacío = día 1)', type: 'number' },
       { k: 'diaAviso', label: 'Avisar por correo desde el día del mes…', type: 'number' },
     ],
     onSave: async d => {
@@ -381,6 +445,7 @@ function formCobrar(x, aviso) {
       { k: 'monto', label: 'Monto ($)', type: 'number' },
       { k: 'deQuien', label: 'De quién / dónde lo esperas' },
       { k: 'desde', label: 'Desde cuándo', type: 'date' },
+      { k: 'fechaEsperada', label: 'Fecha esperada del reembolso/pago (opcional, sale en el calendario)', type: 'date' },
       { k: 'nota', label: 'Notas: # de caso, teléfono, a dónde marcar, qué decir…', type: 'textarea' },
     ],
     onSave: async d => {
@@ -517,8 +582,11 @@ async function sembrar() {
 document.addEventListener('click', async e => {
   if (e.target.id === 'btn-seed') { e.target.disabled = true; await sembrar(); return; }
   const el = e.target.closest('[data-act]'); if (!el) return;
-  const { act, id, mk } = el.dataset, hoy = today();
+  const { act, id, mk, d } = el.dataset, hoy = today();
   try {
+    if (act === 'cal-prev' || act === 'cal-next') { calMes = addMonths(calMes || ymKey(hoy), act === 'cal-next' ? 1 : -1); calSel = null; return render(); }
+    if (act === 'cal-hoy') { calMes = null; calSel = null; return render(); }
+    if (act === 'cal-dia') { calSel = d; return render(); }
     if (act === 'pago-nuevo') return formPago();
     if (act === 'pago-editar') return formPago(byId('pagos', id));
     if (act === 'pago-pagar') { await updateDoc(ref('pagos', id), { pagados: arrayUnion(mk) }); return toast('Marcado como pagado'); }

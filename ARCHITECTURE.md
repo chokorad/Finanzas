@@ -48,3 +48,5 @@ Example: `{nombre:"Colegiatura (hijo)", dia:5, diaInicio:1, monto:4192.2, desde:
 - Firebase project `cobros-97f8b` (Auth with Google provider, Firestore). Authorized domain `chokorad.github.io` must be listed.
 - Google Drive API must be enabled in that Google Cloud project for uploads.
 - GitHub repo secrets: `FIREBASE_SERVICE_ACCOUNT` (service-account JSON), `GMAIL_USER`, `GMAIL_APP_PASSWORD`. Nothing secret is stored in files.
+
+Campos opcionales añadidos en v10: `finanzas_cobrar.fechaEsperada` (YYYY-MM-DD, fecha esperada del reembolso) y `finanzas_rend.diaInicio` (día del mes para empezar la condición; vacío = 1). Solo los usa el calendario de app.js.

@@ -22,3 +22,5 @@
 - Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.
 
 - v9: la versión se ve al pie de la app ("Finanzas vN · fecha"). Regla: en cada cambio subir `VERSION` en app.js y `CACHE` en sw.js al mismo número.
+
+- v10: calendario mensual arriba de la pestaña Hoy (solo en pantalla, los correos no cambian). Emojis por tipo: 💳 pago de tarjeta, 🎓 colegiatura (ventana 1–5), 🌱 día de empezar la condición de rendimientos, ⏳ último día del mes para cumplirla, 🎟 vencimiento de cupón, 💵 cobro esperado. Colores: rojo ≤3 días o vencido, ámbar ≤10 días, verde listo. Campos nuevos opcionales: `fechaEsperada` (finanzas_cobrar) y `diaInicio` (finanzas_rend, vacío = día 1).
