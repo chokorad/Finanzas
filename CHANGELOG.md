@@ -1,5 +1,8 @@
 # CHANGELOG
 
+## 2026-11-09 — Repo renamed
+- GitHub repo renamed `Finanzas` -> `finanzas-app`; Pages URL is now `https://chokorad.github.io/finanzas-app/`. Reason: Chrome on the owner's Pixel Fold had an orphaned install record for the old path ("already installed" but "Could not open app"). New path = new scope. Local folder name stays `Finanzas`. `sw.js` cache v5. Add `chokorad.github.io` check in Firebase authorized domains is unchanged (same domain).
+
 ## 2026-11-09 — Manifest shape experiment
 - `manifest.json`: removed explicit `id`, `start_url` -> `./index.html`, icons merged into `any maskable` entries (same shape as the Cobros manifest that installs fine). Reason: Chrome on Pixel Fold says "Open app" instead of "Install" for Finanzas and fotos-sala only; `chrome://webapks` shows no phantom install. `sw.js` cache v4.
 

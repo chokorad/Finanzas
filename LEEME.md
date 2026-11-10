@@ -3,10 +3,10 @@
 Todo es gratis y sin tarjeta. Son 7 pasos; los tres secretos de GitHub (pasos 5 y 6) son lo único delicado.
 
 ## 1. Subirla a GitHub
-GitHub Desktop → File → **Add local repository** → elige `C:\Users\mario\Claude\Finanzas` (si pregunta, crea el repositorio) → **Publish repository** con nombre `Finanzas`, **sin** marcar "Keep this code private" (GitHub Pages gratis lo necesita público; aquí no hay datos tuyos, solo código).
+GitHub Desktop → File → **Add local repository** → elige `C:\Users\mario\Claude\Finanzas` (si pregunta, crea el repositorio) → **Publish repository** con nombre `finanzas-app`, **sin** marcar "Keep this code private" (GitHub Pages gratis lo necesita público; aquí no hay datos tuyos, solo código).
 
 ## 2. Activar GitHub Pages
-En github.com/chokorad/Finanzas → Settings → Pages → Source: *Deploy from a branch* → `main` / `/ (root)` → Save. La app queda en `https://chokorad.github.io/Finanzas/`.
+En github.com/chokorad/finanzas-app → Settings → Pages → Source: *Deploy from a branch* → `main` / `/ (root)` → Save. La app queda en `https://chokorad.github.io/finanzas-app/`.
 
 ## 3. Firebase (ya casi está)
 Usa el mismo proyecto de Cobros (`cobros-97f8b`), así que el inicio de sesión con Google y las reglas ya sirven (cubren todo `users/{uid}`). Solo confirma en Firebase → Authentication → Settings → Authorized domains que aparezca `chokorad.github.io`.
@@ -16,7 +16,7 @@ Entra a `https://console.cloud.google.com/apis/library/drive.googleapis.com`, ar
 
 ## 5. Llave para que GitHub lea tu base de datos
 Firebase → ⚙ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada* → se baja un `.json`.
-GitHub → repo `Finanzas` → Settings → Secrets and variables → Actions → New repository secret:
+GitHub → repo `finanzas-app` → Settings → Secrets and variables → Actions → New repository secret:
 - Nombre `FIREBASE_SERVICE_ACCOUNT`, valor: **todo el contenido** del `.json`.
 Después **borra el `.json` de tu compu** (no lo pegues en ningún chat ni lo subas al repo).
 
