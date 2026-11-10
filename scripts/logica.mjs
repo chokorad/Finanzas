@@ -50,7 +50,7 @@ export function estadoRend(r, hoy) {
 export function estadoCup(c, hoy) {
   if (c.usado || !c.vence) return { dd: null, pronto: false };
   const dd = diffDays(parse(c.vence), hoy);
-  return { dd, pronto: dd >= 0 && dd <= 7 };
+  return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7) };
 }
 
 // Arma el correo. Devuelve null si no hay nada que avisar.
@@ -81,6 +81,14 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
   }
   for (const c of cup) {
     const e = estadoCup(c, hoy);
+    if (c.meta) {   // promos con meta de gasto: solo en la mañana
+      if (slot !== 'am' || c.usado || e.dd < 0) continue;
+      const avance = `llevas ${MXN(c.gastado || 0)} de ${MXN(c.meta)} · bonificaciones ${c.veces || 0}/${c.maxVeces || '∞'}`;
+      const vence = e.dd === null ? '' : ` Vence en ${e.dd} día(s).`;
+      if (c.porActivar) items.push({ n: 1, orden: 55, sec: 'Promociones', t: `${esc(c.nombre)} — ACTÍVALA antes de gastar (${avance}).${vence}${c.donde ? ' Aplica en: ' + esc(c.donde) : ''}` });
+      else if (e.pronto || (dow === 1 && (c.gastado || 0) > 0)) items.push({ n: 1, orden: 56, sec: 'Promociones', t: `${esc(c.nombre)} — ${avance}.${vence}` });
+      continue;
+    }
     if (!e.pronto) continue;
     if (slot === 'pm' && e.dd > 1) continue;
     items.push({ n: e.dd <= 1 ? 0 : 1, orden: e.dd, sec: 'Cupones por vencer', t: `${esc(c.nombre)}${c.codigo ? ' · <b>' + esc(c.codigo) + '</b>' : ''}${c.donde ? ' (' + esc(c.donde) + ')' : ''} — ${e.dd === 0 ? 'vence HOY' : 'vence en ' + e.dd + ' día(s)'}` });

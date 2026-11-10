@@ -55,7 +55,7 @@ function estadoRend(r, hoy) {
 function estadoCup(c, hoy) {
   if (c.usado || !c.vence) return { dd: null, pronto: false, vencido: false };
   const dd = diffDays(parse(c.vence), hoy);
-  return { dd, pronto: dd >= 0 && dd <= 7, vencido: dd < 0 };
+  return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7), vencido: dd < 0 };
 }
 
 // ---------- estado ----------
@@ -121,7 +121,11 @@ function listaHoy(hoy) {
     }
   }
   for (const r of S.rend) { const e = estadoRend(r, hoy); if (e.avisar) out.push({ nivel: 1, orden: 50, tipo: 'rend', r, e }); }
-  for (const c of S.cup) { const e = estadoCup(c, hoy); if (e.pronto) out.push({ nivel: e.dd <= 1 ? 0 : 1, orden: e.dd, tipo: 'cup', c, e }); }
+  for (const c of S.cup) {
+    const e = estadoCup(c, hoy);
+    if (c.meta) { if (!c.usado && !e.vencido && (c.porActivar || e.pronto)) out.push({ nivel: 1, orden: 55, tipo: 'promo', c, e }); }
+    else if (e.pronto) out.push({ nivel: e.dd <= 1 ? 0 : 1, orden: e.dd, tipo: 'cup', c, e });
+  }
   for (const x of S.cobrar.filter(x => x.estatus !== 'cobrado')) {
     const dias = diffDays(hoy, parse(x.desde || ymd(hoy)));
     if (dias >= 7) out.push({ nivel: 1, orden: 80, tipo: 'cobrar', x, dias });
@@ -141,6 +145,10 @@ function vistaHoy(lista, hoy) {
     if (u.tipo === 'rend') return `<div class="card amb"><div class="fila"><div><div class="t">${esc(u.r.nombre)}</div>
       <small>${esc(u.r.condicion || '')}</small><br><span class="tag amb">${u.e.tipo === 'contador' ? u.e.progreso + '/' + (u.r.meta || 1) : 'falta este mes'}</span></div>
       <div class="acciones">${u.e.tipo === 'contador' ? `<button data-act="rend-mas" data-id="${u.r.id}">+1</button>` : `<button data-act="rend-toggle" data-id="${u.r.id}">Hecho</button>`}</div></div></div>`;
+    if (u.tipo === 'promo') return `<div class="card amb"><div class="fila"><div><div class="t">🎟 ${esc(u.c.nombre)}</div>
+      <span class="tag amb">${u.c.porActivar ? 'actívala antes de gastar' : (u.e.dd == null ? 'en curso' : 'vence en ' + u.e.dd + ' d')}</span>
+      <small>${MXN(u.c.gastado || 0)} de ${MXN(u.c.meta)} · bonificaciones ${u.c.veces || 0}/${u.c.maxVeces || '∞'}</small></div>
+      <div class="acciones">${u.c.porActivar ? `<button data-act="cup-activado" data-id="${u.c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${u.c.id}">＋ Gasto</button>`}</div></div></div>`;
     if (u.tipo === 'cup') return `<div class="card ${claseNivel(u.nivel)}"><div class="fila"><div><div class="t">🎟 ${esc(u.c.nombre)}</div>
       <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.e.dd === 0 ? 'vence HOY' : 'vence en ' + u.e.dd + ' d'}</span> <small>${esc(u.c.codigo || '')}</small></div>
       <div class="acciones"><button data-act="cup-usado" data-id="${u.c.id}">Usado</button></div></div></div>`;
@@ -199,10 +207,14 @@ function vistaCup(hoy) {
     return `<div class="card ${c.usado || e.vencido ? 'gris' : e.pronto ? 'amb' : ''}"><div class="fila"><div>
       <div class="t">🎟 ${esc(c.nombre)}</div>${tag}<small>${esc(c.donde || '')}</small>
       ${c.codigo ? `<div class="t" style="font-family:monospace;margin-top:4px">${esc(c.codigo)}</div>` : ''}
+      ${c.meta ? `<div class="prog"><div style="width:${Math.max(0, Math.min(100, Math.round(((c.gastado || 0) / c.meta) * 100)))}%"></div></div>
+        <small>${MXN(c.gastado || 0)} de ${MXN(c.meta)} · bonificaciones ${c.veces || 0}/${c.maxVeces || '∞'}${c.bonificacion ? ' · ' + MXN(c.bonificacion) + ' c/u' : ''}</small>
+        ${c.porActivar && !c.usado ? '<br><span class="tag amb">Actívala antes de gastar</span>' : ''}` : ''}
       ${c.nota ? `<div class="nota">${esc(c.nota)}</div>` : ''}</div>
-      <div class="acciones">${c.usado ? '' : `<button data-act="cup-usado" data-id="${c.id}">Usado</button>`}<button class="sec chico" data-act="cup-editar" data-id="${c.id}">✎</button></div></div></div>`;
+      <div class="acciones">${c.usado ? '' : c.meta ? (c.porActivar ? `<button data-act="cup-activado" data-id="${c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${c.id}">＋ Gasto</button>`) : ''}${c.usado ? '' : `<button class="${c.meta ? 'sec chico' : ''}" data-act="cup-usado" data-id="${c.id}">${c.meta ? 'Terminada' : 'Usado'}</button>`}<button class="sec chico" data-act="cup-editar" data-id="${c.id}">✎</button></div></div></div>`;
   }).join('');
-  return `<div class="barra"><button class="sec" data-act="cup-nuevo">＋ Nuevo cupón</button></div>` + (filas || '<div class="vacio">Sin cupones.</div>');
+  const sinAmex = !S.cup.some(c => String(c.nombre).startsWith('Amex Platinum: $500'));
+  return `<div class="barra"><button class="sec" data-act="cup-nuevo">＋ Nuevo cupón</button>${sinAmex ? '<button class="sec" data-act="cup-seed-amex">＋ Promo Amex–Walmart</button>' : ''}</div>` + (filas || '<div class="vacio">Sin cupones.</div>');
 }
 
 function vistaCobrar(hoy) {
@@ -316,10 +328,16 @@ function formCup(c) {
       { k: 'codigo', label: 'Código', ph: 'ABC123' },
       { k: 'donde', label: 'Dónde se usa' },
       { k: 'vence', label: 'Vence', type: 'date' },
+      { k: 'meta', label: 'Promo de gasto: meta por bonificación ($, opcional)', type: 'number' },
+      { k: 'bonificacion', label: 'Monto de cada bonificación ($, opcional)', type: 'number' },
+      { k: 'maxVeces', label: 'Máximo de bonificaciones (opcional)', type: 'number' },
+      { k: 'gastado', label: 'Llevas gastado ($, opcional)', type: 'number' },
+      { k: 'veces', label: 'Bonificaciones ya logradas (opcional)', type: 'number' },
       { k: 'nota', label: 'Nota', type: 'textarea' },
     ],
     onSave: async d => {
-      if (nuevo) await addDoc(ref('cup'), { ...d, usado: false }); else await updateDoc(ref('cup', c.id), d);
+      d.gastado = d.gastado || 0; d.veces = d.veces || 0;
+      if (nuevo) await addDoc(ref('cup'), { ...d, usado: false, porActivar: !!d.meta }); else await updateDoc(ref('cup', c.id), d);
       cerrar();
     },
     onDelete: nuevo ? null : () => deleteDoc(ref('cup', c.id)),
@@ -429,6 +447,32 @@ async function subirDrive(file) {
   return driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,mimeType', { method: 'POST', body: fd });
 }
 
+// ---------- promos con meta de gasto ----------
+const PROMO_AMEX = {
+  nombre: 'Amex Platinum: $500 por cada $3,500 en walmart.com.mx',
+  donde: 'walmart.com.mx, Walmart Express y Superama (NO Walmart físico ni Supercenter)',
+  vence: '2027-04-07', meta: 3500, bonificacion: 500, maxVeces: 3, veces: 0, gastado: 0, porActivar: true, usado: false,
+  nota: 'Antes de gastar: inscríbete en la Amex App o Servicios en Línea ("Redimir ahora"). Paga con la Platinum titular (adicionales no cuentan). No cuenta: tarjetas de regalo, apps o agregadores de pago, Walmart Pass, servicios. La bonificación llega al estado de cuenta en ~5 días hábiles (hasta 90 días tras terminar). Si devuelves la compra, se revierte. Vigencia: 8 oct 2026 al 7 abr 2027.',
+};
+function formGasto(c) {
+  formulario({
+    titulo: 'Sumar gasto',
+    valores: {},
+    extraHtml: `<p class="mute"><small>${esc(c.nombre)}<br>Llevas ${MXN(c.gastado || 0)} de ${MXN(c.meta)}. Para restar una devolución usa un monto negativo.</small></p>`,
+    campos: [{ k: 'monto', label: 'Monto del gasto ($)', type: 'number' }],
+    onSave: async d => {
+      let g = Math.max(0, (c.gastado || 0) + d.monto), veces = c.veces || 0, porActivar = !!c.porActivar, usado = !!c.usado, msg = 'Gasto sumado';
+      if (g >= c.meta) {
+        veces += 1; g = 0;
+        if (c.maxVeces && veces >= c.maxVeces) { usado = true; porActivar = false; msg = '¡Meta lograda! Era la última bonificación'; }
+        else { porActivar = true; msg = '¡Meta lograda! Reactiva la promo en la app de Amex'; }
+      }
+      await updateDoc(ref('cup', c.id), { gastado: g, veces, porActivar, usado });
+      toast(msg); cerrar();
+    },
+  });
+}
+
 // ---------- datos iniciales ----------
 async function sembrar() {
   const b = writeBatch(db), mk = ymKey(today());
@@ -472,6 +516,9 @@ document.addEventListener('click', async e => {
     }
     if (act === 'cup-nuevo') return formCup();
     if (act === 'cup-editar') return formCup(byId('cup', id));
+    if (act === 'cup-activado') { await updateDoc(ref('cup', id), { porActivar: false }); return toast('Promo activada: ya cuentan tus gastos'); }
+    if (act === 'cup-gasto') return formGasto(byId('cup', id));
+    if (act === 'cup-seed-amex') { await addDoc(ref('cup'), PROMO_AMEX); return toast('Promo agregada: actívala en la app de Amex'); }
     if (act === 'cup-usado') { await updateDoc(ref('cup', id), { usado: true }); return toast('Cupón marcado como usado'); }
     if (act === 'cob-nuevo') return formCobrar();
     if (act === 'cob-editar') return formCobrar(byId('cobrar', id));

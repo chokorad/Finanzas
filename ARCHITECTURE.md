@@ -23,7 +23,7 @@ Example: `{nombre:"Colegiatura (hijo)", dia:5, diaInicio:1, monto:4192.2, desde:
 **finanzas_rend** — savings accounts with a monthly condition
 `nombre`, `tasa` number (%), `tope` number, `saldo` number, `ipab` bool, `tipoCond` "check"|"contador"|"ninguna", `meta` number (for contador), `condicion` string, `diaAviso` number (email reminders start this day of the month, default 20), and the monthly state `mes` "YYYY-MM", `progreso` number, `cumplido` bool. State auto-resets: if `mes` != current month it is treated as 0/false.
 
-**finanzas_cupones** — `nombre`, `codigo`, `donde`, `vence` "YYYY-MM-DD"|"", `usado` bool, `nota`.
+**finanzas_cupones** — `nombre`, `codigo`, `donde`, `vence` "YYYY-MM-DD"|"", `usado` bool, `nota`. Optional *spend-goal promo* fields: `meta` number (spend needed per bonus), `bonificacion` number (reward), `maxVeces` number|null (max bonuses), `veces` number (bonuses already earned), `gastado` number (progress in the current cycle), `porActivar` bool (promo must be (re)activated before spending counts). When a coupon has `meta`: reminder window is 30 days before `vence` (7 for plain coupons); spend added via "+ Gasto" resets `gastado` to 0 and `veces`+1 on reaching `meta`, sets `porActivar` true (or `usado` true after `maxVeces`).
 
 **finanzas_cobrar** — money owed
 `concepto`, `monto`, `deQuien`, `desde` "YYYY-MM-DD", `nota` (case numbers, phone, etc.), `estatus` "pendiente"|"cobrado", `cobradoFecha`, `archivos` array of `{nombre, fileId, link, mime}` (Drive files).

@@ -74,4 +74,16 @@ ok('zona horaria: 15:00 UTC en invierno = 7am Tijuana; 14:00 UTC en verano = 7am
   assert.equal(ahoraLocal(new Date('2026-11-10T05:07:00Z')).dow, 1);
   assert.equal(slotDe(7), 'am'); assert.equal(slotDe(21), 'pm'); assert.equal(slotDe(13), null);
 });
+ok('promo con meta: pide activarla; ya activa solo avisa el lunes o cerca del fin', () => {
+  const promo = { nombre: 'Amex Walmart', meta: 3500, maxVeces: 3, veces: 1, gastado: 1200, vence: '2027-04-07', porActivar: true, donde: 'walmart.com.mx' };
+  const r1 = armarAviso({ cup: [promo] }, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' });
+  assert.match(r1.html, /ACTÍVALA/); assert.match(r1.html, /1 de 3|1\/3/);
+  assert.equal(armarAviso({ cup: [promo] }, { hoy: D(2026, 11, 10), dow: 2, slot: 'pm' }), null);
+  const activa = { ...promo, porActivar: false };
+  assert.equal(armarAviso({ cup: [activa] }, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' }), null);          // martes lejos del fin: nada
+  assert.match(armarAviso({ cup: [activa] }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' }).html, /1,200/);     // lunes: avance
+  assert.match(armarAviso({ cup: [activa] }, { hoy: D(2027, 3, 10), dow: 3, slot: 'am' }).html, /Vence en 28/); // a 30 días del fin
+  assert.equal(armarAviso({ cup: [{ ...activa, usado: true }] }, { hoy: D(2027, 3, 10), dow: 3, slot: 'am' }), null);
+  assert.equal(armarAviso({ cup: [promo] }, { hoy: D(2027, 4, 8), dow: 4, slot: 'am' }), null);              // ya venció
+});
 console.log('TODAS LAS PRUEBAS PASARON');

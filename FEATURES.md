@@ -4,7 +4,7 @@
 - **Hoy**: everything that needs action now, red first. Quick buttons: Pagado / +1 / Hecho / Usado / Cobrado. Badge on the tab counts red+amber items. Empty store shows the seed button.
 - **Pagos**: one card per payment with next due date, status tag, Pagado, undo (↩, only for the current month), edit. Tuition is a window 1→5 (due day 5).
 - **Rendimientos**: one card per account (rate, cap, IPAB tag, balance, condition text) with counter (+1/−) or checkbox; resets every month.
-- **Cupones**: sorted by expiry, code shown in monospace, "Usado" hides it from reminders.
+- **Cupones**: sorted by expiry, code shown in monospace, "Usado" hides it from reminders. Coupons with a spend goal (`meta`) show a progress bar, "+ Gasto" and "Ya la activé" buttons; the button "＋ Promo Amex–Walmart" adds the Amex Platinum promo ($500 back per $3,500 on walmart.com.mx, max 3, until 2027-04-07) once.
 - **Por cobrar**: open items with days open, total open amount, free-text notes, file attachments (Drive).
 
 ## Decisions already made by Mario (do not undo)
@@ -15,6 +15,9 @@
 - Yield accounts: Revolut 15% (4 purchases of $50+ / 30 days), Mercado Pago Apartado 15% (deposit $3,000/month; no IPAB), Nu Cajita Turbo 13% (1 purchase/month), Mifel 10% (no condition, receives new money).
 - Card due days (from his own notes): LikeU → 23, Gold → 29, Amex → 11.
 - Notion did not work for him because he has to go look; the app must come to him.
+
+- Amex–Walmart promo: Mario shops groceries on walmart.com.mx and wants to track accumulated spend and be told when to re-activate the promo (daily morning email while `porActivar`; Monday progress).
+- App icon: neon wallet image supplied by Mario (`icon-*.png` are generated from it, corners filled so Android does not add a white ring).
 
 ## Edge cases
 - Day 29–31 in short months clamps to the last day.
