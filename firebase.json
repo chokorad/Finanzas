@@ -1,0 +1,13 @@
+{
+  "hosting": {
+    "site": "finanzas-mhq",
+    "public": ".",
+    "ignore": [
+      "firebase.json", ".*", "**/.*", "node_modules/**", "scripts/**", "*.md", ".github/**", "icon-maskable-512.png", "firestore.rules"
+    ],
+    "headers": [
+      { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "/manifest.json", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ]
+  }
+}
