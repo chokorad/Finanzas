@@ -1,0 +1,77 @@
+// Pruebas de la lógica de avisos: node prueba.mjs
+import assert from 'node:assert/strict';
+import { armarAviso, ciclos, ahoraLocal, slotDe } from './logica.mjs';
+const D = (y, m, d) => new Date(y, m - 1, d);
+const pagos = [
+  { nombre: 'LikeU', dia: 23, avisoDias: 5, desde: '2026-11', pagados: [] },
+  { nombre: 'Gold', dia: 29, avisoDias: 5, desde: '2026-11', pagados: [] },
+  { nombre: 'Amex', dia: 11, avisoDias: 5, desde: '2026-11', pagados: [] },
+  { nombre: 'Colegiatura', dia: 5, diaInicio: 1, monto: 4192.2, desde: '2026-12', pagados: [] },
+];
+const ok = (n, f) => { f(); console.log('ok -', n); };
+
+ok('lunes 9-nov: Amex (11) ya entra (5 días antes)', () => {
+  const r = armarAviso({ pagos }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
+  assert.match(r.html, /Amex/); assert.doesNotMatch(r.html, /LikeU/);
+});
+ok('colegiatura: 1-dic entra, 6-dic sigue como vencida hasta marcarla', () => {
+  assert.match(armarAviso({ pagos }, { hoy: D(2026, 12, 1), dow: 2, slot: 'am' }).html, /Colegiatura/);
+  const r = armarAviso({ pagos }, { hoy: D(2026, 12, 6), dow: 0, slot: 'am' });
+  assert.match(r.html, /VENCIDO/);
+});
+ok('colegiatura pagada en dic no avisa', () => {
+  const p = pagos.map(x => x.nombre === 'Colegiatura' ? { ...x, pagados: ['2026-12'] } : x);
+  const r = armarAviso({ pagos: p }, { hoy: D(2026, 12, 3), dow: 4, slot: 'am' });
+  assert.ok(!r || !/Colegiatura/.test(r.html));
+});
+ok('LikeU 23-nov sin pagar: asunto rojo "vence HOY"', () => {
+  const p = pagos.map(x => x.nombre === 'Amex' ? { ...x, pagados: ['2026-11'] } : x);
+  const r = armarAviso({ pagos: p }, { hoy: D(2026, 11, 23), dow: 1, slot: 'am' });
+  assert.match(r.asunto, /vence HOY — LikeU/);
+});
+ok('viernes adelanta fin de semana y lunes (vence sáb/lun, aviso corto)', () => {
+  const p = [{ nombre: 'Seguro', dia: 16, avisoDias: 0, desde: '2026-11', pagados: [] },   // lunes 16-nov
+             { nombre: 'Lejano', dia: 20, avisoDias: 0, desde: '2026-11', pagados: [] }];
+  const r = armarAviso({ pagos: p }, { hoy: D(2026, 11, 13), dow: 5, slot: 'am' });   // viernes
+  assert.match(r.html, /Seguro/); assert.doesNotMatch(r.html, /Lejano/); assert.match(r.html, /Fin de semana/);
+  assert.match(armarAviso({ pagos: p }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' }).html, /Seguro/);   // jueves también
+});
+ok('rendimientos: no avisa antes del día 20, sí después; pm no los incluye', () => {
+  const rend = [{ nombre: 'Revolut', tipoCond: 'contador', meta: 4, condicion: '4 compras', mes: '2026-11', progreso: 1, diaAviso: 20 },
+                { nombre: 'Mifel', tipoCond: 'ninguna' }];
+  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 19), dow: 4, slot: 'am' }), null);
+  assert.match(armarAviso({ rend }, { hoy: D(2026, 11, 20), dow: 5, slot: 'am' }).html, /llevas 1 de 4/);
+  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 20), dow: 5, slot: 'pm' }), null);
+  // el mes siguiente el progreso se reinicia solo
+  assert.match(armarAviso({ rend }, { hoy: D(2026, 12, 21), dow: 1, slot: 'am' }).html, /llevas 0 de 4/);
+  rend[0].progreso = 4;
+  assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 25), dow: 3, slot: 'am' }), null);
+});
+ok('cupones: avisa a 7 días y no si está usado', () => {
+  const cup = [{ nombre: 'Vuelo', codigo: 'XYZ', vence: '2026-11-16' }, { nombre: 'Usado', vence: '2026-11-16', usado: true }];
+  const r = armarAviso({ cup }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
+  assert.match(r.html, /XYZ/); assert.doesNotMatch(r.html, /Usado/);
+  assert.equal(armarAviso({ cup }, { hoy: D(2026, 11, 8), dow: 0, slot: 'am' }), null);
+});
+ok('por cobrar: solo >=7 días y solo en la mañana', () => {
+  const cobrar = [{ concepto: 'Reembolso', desde: '2026-11-01', estatus: 'pendiente', nota: 'caso 123' }, { concepto: 'Nuevo', desde: '2026-11-08', estatus: 'pendiente' }];
+  const r = armarAviso({ cobrar }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
+  assert.match(r.html, /Reembolso/); assert.match(r.html, /caso 123/); assert.doesNotMatch(r.html, /Nuevo/);
+  assert.equal(armarAviso({ cobrar }, { hoy: D(2026, 11, 9), dow: 1, slot: 'pm' }), null);
+});
+ok('lunes sin pendientes manda latido; martes no', () => {
+  assert.match(armarAviso({}, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' }).asunto, /todo en orden/);
+  assert.equal(armarAviso({}, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' }), null);
+});
+ok('cuota a fin de mes corto (día 31 en febrero) cae el 28', () => {
+  const c = ciclos({ dia: 31, avisoDias: 3, desde: '2027-02', pagados: [] }, D(2027, 2, 27));
+  assert.equal(c[0].due.getDate(), 28);
+});
+ok('zona horaria: 15:00 UTC en invierno = 7am Tijuana; 14:00 UTC en verano = 7am', () => {
+  assert.equal(ahoraLocal(new Date('2026-11-10T15:07:00Z')).hora, 7);
+  assert.equal(ahoraLocal(new Date('2026-07-10T14:07:00Z')).hora, 7);
+  assert.equal(ahoraLocal(new Date('2026-11-10T05:07:00Z')).hora, 21);   // 9pm lunes 9-nov
+  assert.equal(ahoraLocal(new Date('2026-11-10T05:07:00Z')).dow, 1);
+  assert.equal(slotDe(7), 'am'); assert.equal(slotDe(21), 'pm'); assert.equal(slotDe(13), null);
+});
+console.log('TODAS LAS PRUEBAS PASARON');

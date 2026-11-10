@@ -1,0 +1,12 @@
+// Estas reglas YA están publicadas para el proyecto compartido con Cobros (cubren users/{uid}/**).
+// Si cambias a un proyecto Firebase nuevo, pégalas en Consola -> Firestore -> Reglas.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid}/{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email == "mariohquintero@gmail.com";
+    }
+  }
+}

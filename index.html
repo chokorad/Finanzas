@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f172a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Finanzas">
+<title>Finanzas</title>
+<style>
+  :root{
+    --bg:#0f172a; --panel:#1e293b; --panel2:#273549; --txt:#e2e8f0; --mute:#94a3b8;
+    --ok:#22c55e; --ok2:#16a34a; --rojo:#ef4444; --amb:#f59e0b; --line:#334155; --acc:#38bdf8;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  body{min-height:100dvh;padding-bottom:40px}
+  button,select,input,textarea{font:inherit;color:inherit}
+  button{background:var(--ok2);border:0;border-radius:10px;padding:.55em .9em;cursor:pointer;font-weight:600}
+  button.sec{background:var(--panel2);font-weight:500}
+  button.peligro{background:#7f1d1d}
+  button.chico{padding:.35em .7em;font-size:.88rem}
+  button:disabled{opacity:.5}
+  input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:.6em .7em}
+  textarea{min-height:90px;resize:vertical}
+  label{display:block;font-size:.85rem;color:var(--mute);margin:.7em 0 .2em}
+  small,.mute{color:var(--mute)}
+  a{color:var(--acc)}
+
+  header.top{position:sticky;top:0;z-index:5;display:flex;gap:4px;padding:10px;background:var(--bg);border-bottom:1px solid var(--line)}
+  header.top button{flex:1;white-space:nowrap;padding:.55em .2em;background:transparent;color:var(--mute);border-radius:8px;font-size:.88rem;position:relative}
+  header.top button.act{background:var(--panel);color:var(--txt)}
+  header.top button .n{position:absolute;top:-2px;right:2px;background:var(--rojo);color:#fff;border-radius:99px;font-size:.68rem;padding:0 .4em;min-width:1.2em;text-align:center}
+  body[data-auth="no"] header.top, body[data-auth="no"] main,
+  body[data-auth="cargando"] header.top, body[data-auth="cargando"] main{display:none!important}
+  body:not([data-auth="no"]) #login{display:none}
+
+  #login{max-width:420px;margin:18vh auto 0;padding:24px;text-align:center}
+  #login h1{margin:0 0 6px}
+  main{max-width:720px;margin:0 auto;padding:14px 14px 0}
+  h2{font-size:1.05rem;margin:18px 0 8px;color:var(--mute);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+  .card{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:12px 14px;margin:8px 0}
+  .card.rojo{border-left-color:var(--rojo)} .card.amb{border-left-color:var(--amb)}
+  .card.ok{border-left-color:var(--ok)} .card.gris{opacity:.6}
+  .fila{display:flex;gap:10px;align-items:center;justify-content:space-between}
+  .fila > div:first-child{min-width:0;flex:1}
+  .t{font-weight:650;overflow-wrap:anywhere}
+  .acciones{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .tag{display:inline-block;font-size:.75rem;padding:.1em .55em;border-radius:99px;background:var(--panel2);color:var(--mute);margin-right:4px}
+  .tag.rojo{background:#7f1d1d;color:#fecaca} .tag.amb{background:#78350f;color:#fde68a} .tag.ok{background:#14532d;color:#bbf7d0}
+  .vacio{color:var(--mute);text-align:center;padding:22px 8px}
+  .barra{display:flex;gap:8px;margin:10px 0}
+  .barra button{flex:1}
+  .nota{white-space:pre-wrap;color:var(--mute);font-size:.88rem;margin-top:6px}
+
+  #modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+  #modal .hoja{background:var(--panel);width:100%;max-width:560px;max-height:92dvh;overflow:auto;border-radius:16px 16px 0 0;padding:16px}
+  @media(min-width:700px){#modal{align-items:center}#modal .hoja{border-radius:16px}}
+  #modal h3{margin:0 0 4px}
+  .botones{display:flex;gap:8px;margin-top:16px}
+  .botones button{flex:1}
+  .archivo{display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:.9rem}
+  #toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);background:#0b1220;border:1px solid var(--line);padding:.6em 1em;border-radius:10px;z-index:30}
+</style>
+</head>
+<body data-auth="cargando">
+
+<section id="login">
+  <h1>Finanzas</h1>
+  <p class="mute">Pagos, rendimientos, cupones y por cobrar. Con avisos a tu correo.</p>
+  <button id="btn-login">Entrar con Google</button>
+  <p id="login-msg" class="mute"></p>
+</section>
+
+<header class="top">
+  <button data-tab="hoy" class="act">Hoy<span class="n" id="n-hoy" hidden></span></button>
+  <button data-tab="pagos">Pagos</button>
+  <button data-tab="rend">Rendim.</button>
+  <button data-tab="cup">Cupones</button>
+  <button data-tab="cobrar">Por cobrar</button>
+</header>
+
+<main>
+  <section id="v-hoy" class="vista"></section>
+  <section id="v-pagos" class="vista" hidden></section>
+  <section id="v-rend" class="vista" hidden></section>
+  <section id="v-cup" class="vista" hidden></section>
+  <section id="v-cobrar" class="vista" hidden></section>
+  <p class="mute" style="text-align:center;margin-top:28px"><small id="quien"></small> <button class="sec chico" id="btn-salir">Salir</button></p>
+</main>
+
+<div id="modal" hidden><div class="hoja" id="hoja"></div></div>
+<div id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

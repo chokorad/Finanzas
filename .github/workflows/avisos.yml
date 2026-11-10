@@ -1,0 +1,49 @@
+name: Avisos por correo
+
+on:
+  schedule:
+    # Mañana (7–9 h Tijuana): 14–17 UTC cubre horario de verano e invierno.
+    - cron: '7 14,15,16,17 * * *'
+    # Noche (21–23 h Tijuana): 4–7 UTC.
+    - cron: '7 4,5,6,7 * * *'
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: 'prueba = manda un correo ahora; am / pm = fuerza ese turno'
+        type: choice
+        default: prueba
+        options: [prueba, am, pm]
+
+permissions:
+  actions: write   # para reactivarse solo (GitHub apaga los horarios tras 60 días sin actividad)
+  contents: read
+
+concurrency:
+  group: avisos
+  cancel-in-progress: false
+
+jobs:
+  avisos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar dependencias
+        working-directory: scripts
+        run: npm install --no-audit --no-fund
+      - name: Enviar avisos
+        working-directory: scripts
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MODO: ${{ github.event.inputs.modo }}
+        run: node avisos.mjs
+      - name: Mantener activo el horario
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow enable avisos.yml --repo "$GITHUB_REPOSITORY" || true
