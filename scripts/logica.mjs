@@ -56,6 +56,17 @@ export function estadoCup(c, hoy) {
 // ---------- calendario para el correo (espejo de eventosMes()/vistaCal() de ../app.js) ----------
 const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
+// Depósitos de nómina ISSSTE (patrón de los talones; los extras son ESTIMADOS: ajusta aquí si cambian).
+const QUINCENA = [[15, 'Quincena ISSSTE (≈ $18,100)'], ['fin', 'Quincena ISSSTE fin de mes (≈ $21,300)']];
+const EXTRAS_NOMINA = [[11, 13, 'Aguinaldo 1ª mitad (estimado)'], [12, 8, 'Vale decembrino (estimado)'], [12, 15, 'Prima vacacional (estimado)'], [12, 20, 'Aguinaldo 2ª mitad (estimado)'],
+  [12, 31, 'Estímulo por antigüedad (estimado)'], [1, 6, 'Bono de Reyes (estimado)'], [3, 31, 'Prima vacacional (estimado)'], [5, 25, 'Estímulo por antigüedad (estimado)'],
+  [1, 'fin', 'Mérito relevante (estimado)'], [4, 'fin', 'Mérito relevante (estimado)'], [7, 'fin', 'Mérito relevante (estimado)'], [10, 'fin', 'Mérito relevante (estimado)']];
+function ingresosMes(mk) {
+  const [y, m] = mk.split('-').map(Number), ult = new Date(y, m, 0).getDate(), out = [];
+  for (const [d, txt] of QUINCENA) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
+  for (const [mm, d, txt] of EXTRAS_NOMINA) if (mm === m) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
+  return out;
+}
 export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = [] }) {
   const ev = {};
   const add = (date, ico, n) => { const k = ymd(date); (ev[k] = ev[k] || []).push({ ico, n }); };
@@ -78,6 +89,7 @@ export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = 
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
     add(parse(x.fechaEsperada), '💵', diffDays(parse(x.fechaEsperada), hoy) < 0 ? 'rojo' : 'amb');
   }
+  for (const i of ingresosMes(mk)) add(i.date, '💰', 'ok');
   return ev;
 }
 export function calendarioHtml(datos, hoy, mk = ymKey(hoy)) {
@@ -100,7 +112,7 @@ export function calendarioHtml(datos, hoy, mk = ymKey(hoy)) {
   filas += '</tr>';
   return `<div style="margin-bottom:16px"><div style="font-weight:700;text-transform:capitalize;margin:0 0 6px">${MESES_L[m - 1]} ${y}</div>`
     + `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${filas}</table>`
-    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo · Azul: hoy</div></div>`;
+    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💰 nómina · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo / te depositan · Azul: hoy</div></div>`;
 }
 
 // Arma el correo. Devuelve null si no hay nada que avisar.
@@ -183,10 +195,16 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · 🎟 vence ${esc(c.nombre)}` });
       for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });
     }
-    for (const g of ag) items.push({ n: 2, orden: 100 + g.d, sec: '📅 Próximos 7 días', t: g.t });
+    for (let d = 1; d <= 7; d++) {
+      const f = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + d), et = fmtFecha(f);
+      for (const i of ingresosMes(ymKey(f))) if (ymd(i.date) === ymd(f)) ag.push({ d, t: `${et} · 💰 ${esc(i.txt)}`, suave: true });
+    }
+    ag.sort((a, b) => a.d - b.d);
+    for (const g of ag) items.push({ n: 2, orden: 100 + g.d, sec: '📅 Próximos 7 días', t: g.t, suave: g.suave });
   }
   const icono = slot === 'am' ? '☀️' : '🌙';
-  if (!items.length) {
+  const reales = items.filter(i => !i.suave);
+  if (!reales.length) {
     if (slot === 'am' && dow === 1) return { asunto: `${icono} Finanzas: todo en orden esta semana ✅`, html: `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px">${calHtml}<p>No hay pendientes urgentes. El sistema de avisos sigue funcionando.</p></div>`, total: 0 };
     return null;
   }
@@ -196,7 +214,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
   const asunto = rojos.length
     ? `${icono} 🔴 Finanzas: ${rojos[0].dd < 0 ? 'VENCIDO' : 'vence HOY'} — ${rojos[0].nombre}${rojos.length > 1 ? ` (+${rojos.length - 1})` : ''}`
     : hoyV.length ? `${icono} Finanzas: hoy ${hoyV[0].nombre}`
-    : `${icono} Finanzas: ${items.length} pendiente${items.length > 1 ? 's' : ''}`;
+    : `${icono} Finanzas: ${reales.length} pendiente${reales.length > 1 ? 's' : ''}`;
   const color = { 0: '#b91c1c', 1: '#b45309', 2: '#555' };
   const secs = [...new Set(items.map(i => i.sec))];
   const aviso = diasAlLunes ? `<p style="background:#fef3c7;padding:8px;border-radius:6px">Fin de semana: no revisas el correo, por eso aquí va también lo que vence hasta el lunes.</p>` : '';
@@ -204,5 +222,5 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
     `<h3 style="margin:16px 0 6px">${s}</h3><ul style="padding-left:18px;margin:0">` +
     items.filter(i => i.sec === s).map(i => `<li style="margin:6px 0;color:${color[i.n]}">${i.t}</li>`).join('') + '</ul>').join('')
     + `<p style="color:#888;font-size:12px;margin-top:20px">Márcalo como pagado/hecho en la app Finanzas para que deje de avisar.</p></div>`;
-  return { asunto, html, total: items.length };
+  return { asunto, html, total: reales.length };
 }

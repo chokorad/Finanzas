@@ -28,3 +28,5 @@
 - v11: el correo de las 7:00 ahora incluye el calendario: "Rendimientos: hoy toca empezar" (día `diaInicio`, o día 1), "Cobros esperados" (`fechaEsperada`, rojo si ya pasó) y "📅 Próximos 7 días" (pagos, rendimientos, cupones y cobros que vienen). Solo turno AM. Lógica en scripts/logica.mjs.
 
 - v12: el correo de las 7:00 trae arriba el calendario del mes como cuadrícula (mismos emojis y colores que la app; si es día 25 o más, también el mes siguiente). `calendarioHtml()`/`eventosMes()` en scripts/logica.mjs son espejo de `vistaCal()`/`eventosMes()` de app.js: si cambias uno, cambia el otro.
+
+- v13: 💰 depósitos de nómina ISSSTE en el calendario (app y correo): quincena del 15 (≈ $18,100) y de fin de mes (≈ $21,300), más extras estimados (aguinaldo nov/dic, vale decembrino 8-dic, prima vacacional 15-dic y 31-mar, antigüedad 31-dic y 25-may, bono de Reyes 6-ene, mérito fin de ene/abr/jul/oct). Datos fijos en `QUINCENA`/`EXTRAS_NOMINA` (app.js y scripts/logica.mjs, deben coincidir; fuente: claude/ingresos-nomina.md del proyecto). En el correo van en la agenda de 7 días como "suaves": no disparan un correo por sí solos.

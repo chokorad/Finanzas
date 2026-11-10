@@ -59,7 +59,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v12 · 9 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v13 · 10 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [] };
 const cargado = { pagos: false, rend: false };
@@ -247,6 +247,17 @@ let calMes = null, calSel = null;
 const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const DIAS_C = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
+// Depósitos de nómina ISSSTE (patrón de los talones; los extras son ESTIMADOS: ajusta aquí si cambian).
+const QUINCENA = [[15, 'Quincena ISSSTE (≈ $18,100)'], ['fin', 'Quincena ISSSTE fin de mes (≈ $21,300)']];
+const EXTRAS_NOMINA = [[11, 13, 'Aguinaldo 1ª mitad (estimado)'], [12, 8, 'Vale decembrino (estimado)'], [12, 15, 'Prima vacacional (estimado)'], [12, 20, 'Aguinaldo 2ª mitad (estimado)'],
+  [12, 31, 'Estímulo por antigüedad (estimado)'], [1, 6, 'Bono de Reyes (estimado)'], [3, 31, 'Prima vacacional (estimado)'], [5, 25, 'Estímulo por antigüedad (estimado)'],
+  [1, 'fin', 'Mérito relevante (estimado)'], [4, 'fin', 'Mérito relevante (estimado)'], [7, 'fin', 'Mérito relevante (estimado)'], [10, 'fin', 'Mérito relevante (estimado)']];
+function ingresosMes(mk) {
+  const [y, m] = mk.split('-').map(Number), ult = new Date(y, m, 0).getDate(), out = [];
+  for (const [d, txt] of QUINCENA) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
+  for (const [mm, d, txt] of EXTRAS_NOMINA) if (mm === m) out.push({ date: new Date(y, m - 1, d === 'fin' ? ult : d), txt });
+  return out;
+}
 function eventosMes(mk, hoy) {
   const ev = {}; // 'YYYY-MM-DD' -> [{ico, txt, n}]
   const add = (date, ico, txt, n) => { const k = ymd(date); (ev[k] = ev[k] || []).push({ ico, txt, n }); };
@@ -280,6 +291,7 @@ function eventosMes(mk, hoy) {
     const dd = diffDays(parse(x.fechaEsperada), hoy);
     add(parse(x.fechaEsperada), '💵', `Cobro esperado: ${x.concepto}${x.monto ? ' · ' + MXN(x.monto) : ''}${dd < 0 ? ' — ya pasó la fecha' : ''}`, dd < 0 ? 'rojo' : 'amb');
   }
+  for (const i of ingresosMes(mk)) add(i.date, '💰', i.txt, 'ok');
   return ev;
 }
 function vistaCal(hoy) {
@@ -301,7 +313,7 @@ function vistaCal(hoy) {
     <div><span class="t" style="text-transform:capitalize">${MESES_L[m - 1]} ${y}</span> ${mk !== ymKey(hoy) ? '<button class="sec chico" data-act="cal-hoy">Hoy</button>' : ''}</div>
     <button class="sec chico" data-act="cal-next">▶</button></div>
     <div class="cal-g">${celdas}</div>${detalle}
-    <div class="leyenda">💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo</div></div>`;
+    <div class="leyenda">💰 depósito de nómina · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
 }
 
 // ---------- modal / formularios ----------
