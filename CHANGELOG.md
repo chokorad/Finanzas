@@ -18,3 +18,5 @@
 - Email reminders via GitHub Actions (`scripts/`, `.github/workflows/avisos.yml`), weekdays 7:00 and 21:00 America/Tijuana, weekend look-ahead on Thu/Fri, dedupe markers, self re-enable step.
 - Shares the Firebase project of Cobros; own collections.
 - Files: everything in the repo root and `scripts/`.
+
+- Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.

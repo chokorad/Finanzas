@@ -94,7 +94,10 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
     items.push({ n: e.dd <= 1 ? 0 : 1, orden: e.dd, sec: 'Cupones por vencer', t: `${esc(c.nombre)}${c.codigo ? ' · <b>' + esc(c.codigo) + '</b>' : ''}${c.donde ? ' (' + esc(c.donde) + ')' : ''} — ${e.dd === 0 ? 'vence HOY' : 'vence en ' + e.dd + ' día(s)'}` });
   }
   if (slot === 'am') {
-    const ab = cobrar.filter(x => x.estatus !== 'cobrado')
+    for (const x of cobrar.filter(x => x.estatus !== 'cobrado' && x.porDefinir)) {
+      items.push({ n: 1, orden: 79, sec: 'Por definir (nota rápida)', t: `${esc(x.concepto)} — falta definir cómo cobrarlo/venderlo` });
+    }
+    const ab = cobrar.filter(x => x.estatus !== 'cobrado' && !x.porDefinir)
       .map(x => ({ x, dias: diffDays(hoy, parse(x.desde || ymd(hoy))) })).filter(o => o.dias >= 7)
       .sort((a, b) => b.dias - a.dias).slice(0, 10);
     for (const { x, dias } of ab) {

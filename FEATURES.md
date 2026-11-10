@@ -23,3 +23,5 @@
 - Day 29–31 in short months clamps to the last day.
 - Cycles older than the previous month are ignored (so an item left unpaid for 2+ months stops showing as overdue; mark/clean it up).
 - Drive token is not persisted; popup may be blocked on some phones — open the app in the browser and allow popups for the site.
+
+- Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.

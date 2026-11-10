@@ -128,7 +128,7 @@ function listaHoy(hoy) {
   }
   for (const x of S.cobrar.filter(x => x.estatus !== 'cobrado')) {
     const dias = diffDays(hoy, parse(x.desde || ymd(hoy)));
-    if (dias >= 7) out.push({ nivel: 1, orden: 80, tipo: 'cobrar', x, dias });
+    if (dias >= 7 || x.porDefinir) out.push({ nivel: 1, orden: x.porDefinir ? 79 : 80, tipo: 'cobrar', x, dias });
   }
   return out.sort((a, b) => a.nivel - b.nivel || a.orden - b.orden);
 }
@@ -153,7 +153,7 @@ function vistaHoy(lista, hoy) {
       <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.e.dd === 0 ? 'vence HOY' : 'vence en ' + u.e.dd + ' d'}</span> <small>${esc(u.c.codigo || '')}</small></div>
       <div class="acciones"><button data-act="cup-usado" data-id="${u.c.id}">Usado</button></div></div></div>`;
     return `<div class="card amb"><div class="fila"><div><div class="t">💵 ${esc(u.x.concepto)}</div>
-      <small>${esc(u.x.deQuien || '')} ${u.x.monto ? '· ' + MXN(u.x.monto) : ''}</small><br><span class="tag amb">${u.dias} días abierto</span></div>
+      <small>${esc(u.x.deQuien || '')} ${u.x.monto ? '· ' + MXN(u.x.monto) : ''}</small><br><span class="tag amb">${u.x.porDefinir ? 'por definir' : u.dias + ' días abierto'}</span></div>
       <div class="acciones"><button class="sec" data-act="cob-editar" data-id="${u.x.id}">Abrir</button><button data-act="cob-cobrado" data-id="${u.x.id}">Cobrado</button></div></div></div>`;
   }).join('');
 }
@@ -221,7 +221,7 @@ function vistaCup(hoy) {
 }
 
 function vistaCobrar(hoy) {
-  const ord = S.cobrar.slice().sort((a, b) => ((a.estatus === 'cobrado') - (b.estatus === 'cobrado')) || String(a.desde).localeCompare(String(b.desde)));
+  const ord = S.cobrar.slice().sort((a, b) => ((a.estatus === 'cobrado') - (b.estatus === 'cobrado')) || (!!b.porDefinir - !!a.porDefinir) || String(a.desde).localeCompare(String(b.desde)));
   const abiertos = ord.filter(x => x.estatus !== 'cobrado');
   const total = abiertos.reduce((s, x) => s + (Number(x.monto) || 0), 0);
   const filas = ord.map(x => {
@@ -229,12 +229,12 @@ function vistaCobrar(hoy) {
     return `<div class="card ${cob ? 'gris' : dias >= 7 ? 'amb' : ''}"><div class="fila"><div>
       <div class="t">💵 ${esc(x.concepto)}</div>
       <small>${esc(x.deQuien || '')} ${x.monto ? '· ' + MXN(x.monto) : ''}</small><br>
-      ${cob ? '<span class="tag ok">cobrado</span>' : `<span class="tag ${dias >= 7 ? 'amb' : ''}">${dias} d abierto</span>`}
+      ${cob ? '<span class="tag ok">cobrado</span>' : x.porDefinir ? '<span class="tag amb">por definir</span>' : `<span class="tag ${dias >= 7 ? 'amb' : ''}">${dias} d abierto</span>`}
       ${(x.archivos || []).length ? `<span class="tag">📎 ${x.archivos.length}</span>` : ''}
       ${x.nota ? `<div class="nota">${esc(x.nota)}</div>` : ''}</div>
       <div class="acciones">${cob ? '' : `<button data-act="cob-cobrado" data-id="${x.id}">Cobrado</button>`}<button class="sec chico" data-act="cob-editar" data-id="${x.id}">✎</button></div></div></div>`;
   }).join('');
-  return `<div class="barra"><button class="sec" data-act="cob-nuevo">＋ Nuevo</button></div>`
+  return `<div class="barra"><button data-act="cob-rapida">🎤 Nota rápida</button><button class="sec" data-act="cob-nuevo">＋ Nuevo</button></div>`
     + (abiertos.length ? `<p class="mute">Abiertos: <b>${abiertos.length}</b> · ${MXN(total)}</p>` : '')
     + (filas || '<div class="vacio">Nada por cobrar. Aquí van reembolsos, cosas que compraste para vender, etc.</div>');
 }
@@ -347,6 +347,20 @@ function formCup(c) {
   });
 }
 
+function formRapida() {
+  formulario({
+    titulo: 'Nota rápida',
+    valores: {},
+    extraHtml: '<p class="mute"><small>Dicta o escribe lo que sea (usa el micrófono del teclado). Los datos los completas después.</small></p>',
+    campos: [{ k: 'concepto', label: 'Qué quedó pendiente', type: 'textarea', ph: 'Vender la tableta, reembolso de la licuadora…' }],
+    onSave: async d => {
+      if (!String(d.concepto || '').trim()) return toast('Escribe algo');
+      await addDoc(ref('cobrar'), { concepto: String(d.concepto).trim(), estatus: 'pendiente', porDefinir: true, desde: ymd(today()), archivos: [] });
+      cerrar(); toast('Guardada: queda como "por definir"');
+    },
+  });
+  setTimeout(() => { const el = $('#f_concepto'); if (el) el.focus(); }, 100);
+}
 function formCobrar(x, aviso) {
   const nuevo = !x;
   const listaArchivos = a => (a || []).map((f, i) => `<div class="archivo"><a href="${esc(f.link)}" target="_blank" rel="noopener">📎 ${esc(f.nombre)}</a>
@@ -371,7 +385,7 @@ function formCobrar(x, aviso) {
       if (nuevo) {
         const r = await addDoc(ref('cobrar'), { ...d, estatus: 'pendiente', archivos: [] });
         formCobrar({ id: r.id, ...d, estatus: 'pendiente', archivos: [] }, 'Guardado ✔ Ahora puedes subir recibos o capturas.');
-      } else { await updateDoc(ref('cobrar', x.id), d); cerrar(); }
+      } else { await updateDoc(ref('cobrar', x.id), { ...d, porDefinir: false }); cerrar(); }
     },
     onDelete: nuevo ? null : () => deleteDoc(ref('cobrar', x.id)),
     onExtra: nuevo ? null : () => {
@@ -524,6 +538,7 @@ document.addEventListener('click', async e => {
     if (act === 'cup-seed-amex') { await addDoc(ref('cup'), PROMO_AMEX); return toast('Promo agregada: actívala en la app de Amex'); }
     if (act === 'cup-usado') { await updateDoc(ref('cup', id), { usado: true }); return toast('Cupón marcado como usado'); }
     if (act === 'cob-nuevo') return formCobrar();
+    if (act === 'cob-rapida') return formRapida();
     if (act === 'cob-editar') return formCobrar(byId('cobrar', id));
     if (act === 'cob-cobrado') { await updateDoc(ref('cobrar', id), { estatus: 'cobrado', cobradoFecha: ymd(hoy) }); return toast('¡Cobrado!'); }
   } catch (err) { console.error(err); toast('Error: ' + (err.code || err.message)); }
