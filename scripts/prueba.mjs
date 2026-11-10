@@ -96,4 +96,11 @@ ok('calendario en el correo: rendimientos, cobros esperados y agenda', () => {
   assert.match(r2.html, /hoy toca empezar/);
   assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 9), dow: 1, slot: 'pm' }), null);
 });
+ok('el correo AM trae el calendario del mes (y el PM no)', () => {
+  const cobrar = [{ concepto: 'Batidora', estatus: 'pendiente', desde: '2026-08-07', fechaEsperada: '2026-11-20' }];
+  const am = armarAviso({ pagos, cobrar }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });
+  assert.match(am.html, /noviembre 2026/); assert.match(am.html, /<table/); assert.match(am.html, /💳/); assert.match(am.html, /💵/);
+  assert.doesNotMatch(armarAviso({ pagos }, { hoy: D(2026, 11, 11), dow: 3, slot: 'pm' }).html, /<table/);
+  assert.match(armarAviso({ pagos }, { hoy: D(2026, 11, 26), dow: 4, slot: 'am' }).html, /diciembre 2026/); // fin de mes: muestra el siguiente
+});
 console.log('TODAS LAS PRUEBAS PASARON');

@@ -59,7 +59,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v11 · 9 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v12 · 9 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [] };
 const cargado = { pagos: false, rend: false };

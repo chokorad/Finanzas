@@ -53,8 +53,59 @@ export function estadoCup(c, hoy) {
   return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7) };
 }
 
+// ---------- calendario para el correo (espejo de eventosMes()/vistaCal() de ../app.js) ----------
+const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
+export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = [] }) {
+  const ev = {};
+  const add = (date, ico, n) => { const k = ymd(date); (ev[k] = ev[k] || []).push({ ico, n }); };
+  const nivelDd = dd => dd <= 3 ? 'rojo' : dd <= 10 ? 'amb' : 'base';
+  for (const p of pagos.filter(p => p.activo !== false)) {
+    if (p.desde && mk < p.desde) continue;
+    const due = dueOf(mk, p.dia), pagado = (p.pagados || []).includes(mk), dd = diffDays(due, hoy);
+    if (p.diaInicio) { add(dueOf(mk, p.diaInicio), '🎓', pagado ? 'ok' : 'amb'); add(due, '🎓', pagado ? 'ok' : nivelDd(dd)); }
+    else add(due, '💳', pagado ? 'ok' : nivelDd(dd));
+  }
+  const ultimo = new Date(+mk.slice(0, 4), +mk.slice(5, 7), 0);
+  for (const r of rend) {
+    const tipo = r.tipoCond || 'ninguna'; if (tipo === 'ninguna') continue;
+    const hecho = mk === ymKey(hoy) && estadoRend(r, hoy).hecho;
+    add(dueOf(mk, Number(r.diaInicio) || 1), '🌱', hecho ? 'ok' : 'amb');
+    if (!hecho && mk >= ymKey(hoy)) add(ultimo, '⏳', ultimo < hoy ? 'rojo' : nivelDd(diffDays(ultimo, hoy)));
+  }
+  for (const c of cup) if (!c.usado && c.vence && c.vence.slice(0, 7) === mk) add(parse(c.vence), '🎟', nivelDd(diffDays(parse(c.vence), hoy)));
+  for (const x of cobrar) {
+    if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
+    add(parse(x.fechaEsperada), '💵', diffDays(parse(x.fechaEsperada), hoy) < 0 ? 'rojo' : 'amb');
+  }
+  return ev;
+}
+export function calendarioHtml(datos, hoy, mk = ymKey(hoy)) {
+  const [y, m] = mk.split('-').map(Number), hk = ymd(hoy);
+  const ev = eventosMes(mk, hoy, datos), nd = new Date(y, m, 0).getDate(), off = (new Date(y, m - 1, 1).getDay() + 6) % 7;
+  const bg = { rojo: '#fecaca', amb: '#fde68a', ok: '#bbf7d0', '': '#f1f5f9' };
+  const td = (inner, st = '') => `<td style="width:14.28%;height:46px;vertical-align:top;text-align:center;font-size:12px;border:1px solid #e2e8f0;padding:2px 0;${st}">${inner}</td>`;
+  let filas = '<tr>' + ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'].map(d => `<td style="text-align:center;font-size:11px;color:#64748b;padding:2px 0">${d}</td>`).join('') + '</tr><tr>';
+  let col = 0;
+  for (let i = 0; i < off; i++, col++) filas += '<td></td>';
+  for (let d = 1; d <= nd; d++, col++) {
+    if (col === 7) { filas += '</tr><tr>'; col = 0; }
+    const k = `${mk}-${pad(d)}`, es = ev[k] || [];
+    const peor = es.reduce((a, e) => PESO[e.n] > PESO[a] ? e.n : a, 'ok');
+    const color = es.length ? (peor === 'base' ? '' : peor) : '';
+    const ems = [...new Set(es.map(e => e.ico))].slice(0, 3).join('');
+    const num = k === hk ? `<span style="background:#0ea5e9;color:#fff;border-radius:10px;padding:0 6px;font-weight:700">${d}</span>` : `<b>${d}</b>`;
+    filas += td(`${num}<br><span style="font-size:13px">${ems}</span>`, `background:${bg[color]};${k === hk ? 'border:2px solid #0ea5e9;' : ''}${k < hk ? 'opacity:.7;' : ''}`);
+  }
+  filas += '</tr>';
+  return `<div style="margin-bottom:16px"><div style="font-weight:700;text-transform:capitalize;margin:0 0 6px">${MESES_L[m - 1]} ${y}</div>`
+    + `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${filas}</table>`
+    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo · Azul: hoy</div></div>`;
+}
+
 // Arma el correo. Devuelve null si no hay nada que avisar.
 export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { hoy, dow, slot }) {
+  const calHtml = slot === 'am' ? calendarioHtml({ pagos, rend, cup, cobrar }, hoy) + (hoy.getDate() >= 25 ? calendarioHtml({ pagos, rend, cup, cobrar }, hoy, addMonths(ymKey(hoy), 1)) : '') : '';
   const diasAlLunes = dow === 4 ? 4 : dow === 5 ? 3 : 0;   // jueves/viernes: adelantar fin de semana y lunes
   const items = []; // {n: 0 rojo | 1 ámbar | 2 gris, t: texto, orden}
   const cuandoPago = (c, p) => {
@@ -127,7 +178,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       for (const r of rend) {
         if ((r.tipoCond || 'ninguna') === 'ninguna' || f.getDate() !== (Number(r.diaInicio) || 1)) continue;
         if (ymKey(f) === ymKey(hoy) && estadoRend(r, hoy).hecho) continue;
-        ag.push({ d, t: `${et} · 🌱 ${esc(r.nombre)}: empezar ${esc(r.condicion || 'condición del mes')}` });
+        ag.push({ d, t: `${et} · 🌱 ${esc(r.nombre)}: ${esc(r.condicion || "condición del mes")}` });
       }
       for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · 🎟 vence ${esc(c.nombre)}` });
       for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });
@@ -136,7 +187,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
   }
   const icono = slot === 'am' ? '☀️' : '🌙';
   if (!items.length) {
-    if (slot === 'am' && dow === 1) return { asunto: `${icono} Finanzas: todo en orden esta semana ✅`, html: '<p>No hay pendientes urgentes. El sistema de avisos sigue funcionando.</p>', total: 0 };
+    if (slot === 'am' && dow === 1) return { asunto: `${icono} Finanzas: todo en orden esta semana ✅`, html: `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px">${calHtml}<p>No hay pendientes urgentes. El sistema de avisos sigue funcionando.</p></div>`, total: 0 };
     return null;
   }
   items.sort((a, b) => a.n - b.n || a.orden - b.orden);
@@ -149,7 +200,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
   const color = { 0: '#b91c1c', 1: '#b45309', 2: '#555' };
   const secs = [...new Set(items.map(i => i.sec))];
   const aviso = diasAlLunes ? `<p style="background:#fef3c7;padding:8px;border-radius:6px">Fin de semana: no revisas el correo, por eso aquí va también lo que vence hasta el lunes.</p>` : '';
-  const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px">${aviso}` + secs.map(s =>
+  const html = `<div style="font-family:system-ui,Arial,sans-serif;max-width:560px">${aviso}${calHtml}` + secs.map(s =>
     `<h3 style="margin:16px 0 6px">${s}</h3><ul style="padding-left:18px;margin:0">` +
     items.filter(i => i.sec === s).map(i => `<li style="margin:6px 0;color:${color[i.n]}">${i.t}</li>`).join('') + '</ul>').join('')
     + `<p style="color:#888;font-size:12px;margin-top:20px">Márcalo como pagado/hecho en la app Finanzas para que deje de avisar.</p></div>`;
