@@ -145,9 +145,9 @@ function vistaHoy(lista, hoy) {
     if (u.tipo === 'rend') return `<div class="card amb"><div class="fila"><div><div class="t">${esc(u.r.nombre)}</div>
       <small>${esc(u.r.condicion || '')}</small><br><span class="tag amb">${u.e.tipo === 'contador' ? u.e.progreso + '/' + (u.r.meta || 1) : 'falta este mes'}</span></div>
       <div class="acciones">${u.e.tipo === 'contador' ? `<button data-act="rend-mas" data-id="${u.r.id}">+1</button>` : `<button data-act="rend-toggle" data-id="${u.r.id}">Hecho</button>`}</div></div></div>`;
-    if (u.tipo === 'promo') return `<div class="card amb"><div class="fila"><div><div class="t">🎟 ${esc(u.c.nombre)}</div>
+    if (u.tipo === 'promo') return `<div class="card amb"><div class="fila"><div><div class="t">🎟 ${esc(nomCup(u.c))}</div>
       <span class="tag amb">${u.c.porActivar ? 'actívala antes de gastar' : (u.e.dd == null ? 'en curso' : 'vence en ' + u.e.dd + ' d')}</span>
-      <small>${MXN(u.c.gastado || 0)} de ${MXN(u.c.meta)} · bonificaciones ${u.c.veces || 0}/${u.c.maxVeces || '∞'}</small></div>
+      <small>Llevas ${MXN(u.c.gastado || 0)} · faltan ${MXN(Math.max(0, u.c.meta - (u.c.gastado || 0)))}</small></div>
       <div class="acciones">${u.c.porActivar ? `<button data-act="cup-activado" data-id="${u.c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${u.c.id}">＋ Gasto</button>`}</div></div></div>`;
     if (u.tipo === 'cup') return `<div class="card ${claseNivel(u.nivel)}"><div class="fila"><div><div class="t">🎟 ${esc(u.c.nombre)}</div>
       <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.e.dd === 0 ? 'vence HOY' : 'vence en ' + u.e.dd + ' d'}</span> <small>${esc(u.c.codigo || '')}</small></div>
@@ -198,19 +198,22 @@ function vistaRend(hoy) {
     + `<p class="mute"><small>El avance se reinicia solo cada mes y te avisan por correo desde el día indicado en cada cuenta.</small></p>`;
 }
 
+const nomCup = c => String(c.nombre).startsWith('Amex Platinum: $500') ? 'Amex–Walmart' : c.nombre;
 function vistaCup(hoy) {
   const items = S.cup.slice().sort((a, b) => (!!a.usado - !!b.usado) || String(a.vence || '9999').localeCompare(String(b.vence || '9999')));
   const filas = items.map(c => {
     const e = estadoCup(c, hoy);
     const tag = c.usado ? '<span class="tag">usado</span>' : e.vencido ? '<span class="tag rojo">vencido</span>'
       : e.pronto ? `<span class="tag amb">${e.dd === 0 ? 'vence HOY' : 'en ' + e.dd + ' d'}</span>` : c.vence ? `<span class="tag">vence ${fmtFecha(parse(c.vence))}</span>` : '';
+    const falta = c.meta ? Math.max(0, c.meta - (c.gastado || 0)) : 0;
+    const det = [c.donde, c.vence && c.meta ? 'Vence ' + fmtFecha(parse(c.vence)) : '', c.meta && c.maxVeces ? 'Bonificaciones: ' + (c.veces || 0) + '/' + c.maxVeces + (c.bonificacion ? ' de ' + MXN(c.bonificacion) : '') : '', c.nota].filter(Boolean).join('\n');
     return `<div class="card ${c.usado || e.vencido ? 'gris' : e.pronto ? 'amb' : ''}"><div class="fila"><div>
-      <div class="t">🎟 ${esc(c.nombre)}</div>${tag}<small>${esc(c.donde || '')}</small>
+      <div class="t">🎟 ${esc(nomCup(c))}</div>${tag}${c.meta ? '' : `<small>${esc(c.donde || '')}</small>`}
       ${c.codigo ? `<div class="t" style="font-family:monospace;margin-top:4px">${esc(c.codigo)}</div>` : ''}
       ${c.meta ? `<div class="prog"><div style="width:${Math.max(0, Math.min(100, Math.round(((c.gastado || 0) / c.meta) * 100)))}%"></div></div>
-        <small>${MXN(c.gastado || 0)} de ${MXN(c.meta)} · bonificaciones ${c.veces || 0}/${c.maxVeces || '∞'}${c.bonificacion ? ' · ' + MXN(c.bonificacion) + ' c/u' : ''}</small>
+        <small>Llevas ${MXN(c.gastado || 0)} · faltan ${MXN(falta)}</small>
         ${c.porActivar && !c.usado ? '<br><span class="tag amb">Actívala antes de gastar</span>' : ''}` : ''}
-      ${c.nota ? `<div class="nota">${esc(c.nota)}</div>` : ''}</div>
+      ${c.meta ? (det ? `<details class="det"><summary>Detalles</summary><div class="nota">${esc(det)}</div></details>` : '') : (c.nota ? `<div class="nota">${esc(c.nota)}</div>` : '')}</div>
       <div class="acciones">${c.usado ? '' : c.meta ? (c.porActivar ? `<button data-act="cup-activado" data-id="${c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${c.id}">＋ Gasto</button>`) : ''}${c.usado ? '' : `<button class="${c.meta ? 'sec chico' : ''}" data-act="cup-usado" data-id="${c.id}">${c.meta ? 'Terminada' : 'Usado'}</button>`}<button class="sec chico" data-act="cup-editar" data-id="${c.id}">✎</button></div></div></div>`;
   }).join('');
   const sinAmex = !S.cup.some(c => String(c.nombre).startsWith('Amex Platinum: $500'));
@@ -450,7 +453,7 @@ async function subirDrive(file) {
 // ---------- promos con meta de gasto ----------
 const PROMO_AMEX = {
   nombre: 'Amex Platinum: $500 por cada $3,500 en walmart.com.mx',
-  donde: 'walmart.com.mx, Walmart Express y Superama (NO Walmart físico ni Supercenter)',
+  donde: 'walmart.com.mx (no tienda física)',
   vence: '2027-04-07', meta: 3500, bonificacion: 500, maxVeces: 3, veces: 0, gastado: 0, porActivar: true, usado: false,
   nota: 'Antes de gastar: inscríbete en la Amex App o Servicios en Línea ("Redimir ahora"). Paga con la Platinum titular (adicionales no cuentan). No cuenta: tarjetas de regalo, apps o agregadores de pago, Walmart Pass, servicios. La bonificación llega al estado de cuenta en ~5 días hábiles (hasta 90 días tras terminar). Si devuelves la compra, se revierte. Vigencia: 8 oct 2026 al 7 abr 2027.',
 };
