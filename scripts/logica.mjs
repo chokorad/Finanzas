@@ -23,7 +23,9 @@ export function ahoraLocal(date = new Date(), tz = 'America/Tijuana') {
   };
 }
 // Turnos: mañana 7–9 h, noche 21–23 h (ventana por si GitHub retrasa la ejecución).
-export const slotDe = hora => (hora >= 7 && hora <= 9) ? 'am' : (hora >= 21 && hora <= 23) ? 'pm' : null;
+// Ventanas amplias a propósito: GitHub retrasa o salta los horarios programados (a veces horas), así que
+// el primer run que caiga dentro de la ventana manda el aviso (finanzas_envios evita duplicados).
+export const slotDe = hora => (hora >= 7 && hora <= 14) ? 'am' : (hora >= 21 && hora <= 23) ? 'pm' : null;
 
 export function ciclos(p, hoy) {
   const key = ymKey(hoy), out = [];

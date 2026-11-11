@@ -72,7 +72,7 @@ ok('zona horaria: 15:00 UTC en invierno = 7am Tijuana; 14:00 UTC en verano = 7am
   assert.equal(ahoraLocal(new Date('2026-07-10T14:07:00Z')).hora, 7);
   assert.equal(ahoraLocal(new Date('2026-11-10T05:07:00Z')).hora, 21);   // 9pm lunes 9-nov
   assert.equal(ahoraLocal(new Date('2026-11-10T05:07:00Z')).dow, 1);
-  assert.equal(slotDe(7), 'am'); assert.equal(slotDe(21), 'pm'); assert.equal(slotDe(13), null);
+  assert.equal(slotDe(7), 'am'); assert.equal(slotDe(21), 'pm'); assert.equal(slotDe(13), 'am'); assert.equal(slotDe(15), null); assert.equal(slotDe(20), null);
 });
 ok('promo con meta: pide activarla; ya activa solo avisa el lunes o cerca del fin', () => {
   const promo = { nombre: 'Amex Walmart', meta: 3500, maxVeces: 3, veces: 1, gastado: 1200, vence: '2027-04-07', porActivar: true, donde: 'walmart.com.mx' };
