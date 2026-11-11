@@ -27,3 +27,7 @@
 - Por cobrar: 'Nota rápida' (🎤 usa el dictado del teclado) guarda un pendiente `porDefinir:true` con solo el texto; aparece en Hoy y en el correo AM como 'Por definir' hasta que se edita y guarda (se pone `porDefinir:false`). Si se agrega Gemini algún día, llenaría monto/deQuien solo.
 
 - Calendario mensual en Hoy (v10): navegación ◀ ▶, día de hoy resaltado, toque en un día muestra el detalle. Lógica en `eventosMes()`/`vistaCal()` de app.js (solo pantalla). Pendiente posible: mostrar también los eventos del calendario en los correos.
+
+- Dinero (v15): capital total, jarras de T. Harv Eker (Necesidades 15,000 = colchón de 2 meses a $7,500; Educación, Diversión, Dar 1,500 c/u; Libertad financiera 0; Ahorro a largo plazo = resto) y "Tarjetas" aparte. Mario actualiza saldos y reparte cada quincena (no se anota gasto por gasto). Decisión: todo se acumula; el efectivo es una cuenta más; las jarras dicen de qué es el dinero y las cuentas dónde está.
+- Estados de cuenta (v15): cortes LikeU 4, Gold 11, Amex 22, Mercado Pago 7; recordatorio de revisión 2 días después. La clasificación de gastos por jarra la hace Claude en el chat con los archivos (CSV/XML) que Mario mande; el resumen mensual va en un TXT en su Drive (no automatizado en la app).
+- Botón flotante 🎤: abre "Nota rápida" desde cualquier pestaña (dictado con el micrófono del teclado).

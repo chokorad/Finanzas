@@ -72,6 +72,8 @@
   .cal-ev{border-left:4px solid var(--line);padding:4px 8px;margin:6px 0;font-size:.92rem}
   .cal-ev.rojo{border-color:var(--rojo)}.cal-ev.amb{border-color:var(--amb)}.cal-ev.ok{border-color:var(--ok)}.cal-ev.base{border-color:var(--acc)}
   .leyenda{color:var(--mute);font-size:.72rem;margin-top:10px;line-height:1.5}
+  #fab{position:fixed;right:16px;bottom:20px;width:58px;height:58px;border-radius:50%;padding:0;font-size:1.6rem;display:none;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.5);z-index:10;background:linear-gradient(135deg,#22d3ee,#e879f9);color:#0f172a}
+  body[data-auth="si"] #fab{display:flex}
   .det summary{cursor:pointer;color:var(--mute);font-size:.82rem;margin-top:6px}
   .nota{white-space:pre-wrap;color:var(--mute);font-size:.88rem;margin-top:6px}
 
@@ -97,7 +99,7 @@
 <header class="top">
   <button data-tab="hoy" class="act">Hoy<span class="n" id="n-hoy" hidden></span></button>
   <button data-tab="pagos">Pagos</button>
-  <button data-tab="rend">Rendim.</button>
+  <button data-tab="rend">Dinero</button>
   <button data-tab="cup">Cupones</button>
   <button data-tab="cobrar">Por cobrar</button>
 </header>
@@ -110,6 +112,7 @@
   <section id="v-cobrar" class="vista" hidden></section>
   <p class="mute" style="text-align:center;margin-top:28px"><small id="quien"></small> <button class="sec chico" id="btn-salir">Salir</button></p>
 </main>
+<button id="fab" data-act="cob-rapida" title="Nota rápida" aria-label="Nota rápida">🎤</button>
 <footer id="ver" style="text-align:center;color:var(--mute);font-size:.75rem;padding:18px 0 90px"></footer>
 
 <div id="modal" hidden><div class="hoja" id="hoja"></div></div>

@@ -50,3 +50,5 @@ Example: `{nombre:"Colegiatura (hijo)", dia:5, diaInicio:1, monto:4192.2, desde:
 - GitHub repo secrets: `FIREBASE_SERVICE_ACCOUNT` (service-account JSON), `GMAIL_USER`, `GMAIL_APP_PASSWORD`. Nothing secret is stored in files.
 
 Campos opcionales añadidos en v10: `finanzas_cobrar.fechaEsperada` (YYYY-MM-DD, fecha esperada del reembolso) y `finanzas_rend.diaInicio` (día del mes para empezar la condición; vacío = 1). Solo los usa el calendario de app.js.
+
+v15 — colecciones nuevas bajo users/{uid}: `finanzas_jarras` {nombre, monto, orden, nota?, aparte?}, `finanzas_metas` {nombre, objetivo, orden}. Campos nuevos: `finanzas_pagos.corte` (día de corte), `finanzas_pagos.estados` (array 'YYYY-MM' de cortes ya revisados), `finanzas_rend.efectivo` (oculta IPAB). Capital total = suma de `saldo` de `finanzas_rend`. Funciones espejo app.js ↔ scripts/logica.mjs: `ajustaFinde`, `revisionDe`, `estadosPendientes`, `ESTADOS_DESDE`, `QUINCENAS`, `eventosMes` (calendario).

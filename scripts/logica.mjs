@@ -53,6 +53,23 @@ export function estadoCup(c, hoy) {
   return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7) };
 }
 
+// ---------- estados de cuenta (espejo de app.js): revisar 2 días después del corte; fin de semana -> viernes ----------
+export const ESTADOS_DESDE = '2026-11';
+const ajustaFinde = d => { const w = d.getDay(); return w === 6 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : w === 0 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 2) : d; };
+export const revisionDe = (p, mk) => ajustaFinde(dueOf(mk, (Number(p.corte) || 1) + 2));
+export function estadosPendientes(pagos, hoy) {
+  const out = [];
+  for (const p of pagos.filter(p => p.activo !== false && p.corte)) {
+    for (const k of [-2, -1, 0]) {
+      const mk = addMonths(ymKey(hoy), k);
+      if (mk < ESTADOS_DESDE || (p.estados || []).includes(mk)) continue;
+      const rev = revisionDe(p, mk), dias = diffDays(hoy, rev);
+      if (dias >= 0) out.push({ p, mk, rev, dias, corte: dueOf(mk, p.corte) });
+    }
+  }
+  return out.sort((a, b) => b.dias - a.dias);
+}
+
 // ---------- calendario para el correo (espejo de eventosMes()/vistaCal() de ../app.js) ----------
 const MESES_L = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const PESO = { rojo: 3, amb: 2, base: 1, ok: 0 };
@@ -83,6 +100,11 @@ export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = 
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
     add(parse(x.fechaEsperada), '💵', diffDays(parse(x.fechaEsperada), hoy) < 0 ? 'rojo' : 'amb');
   }
+  for (const p of pagos.filter(p => p.activo !== false && p.corte)) {
+    if (mk < ESTADOS_DESDE) continue;
+    const rev = revisionDe(p, mk), ok = (p.estados || []).includes(mk);
+    add(rev, '📄', ok ? 'ok' : rev < hoy ? 'amb' : nivelDd(diffDays(rev, hoy)));
+  }
   for (const i of ingresosMes(mk)) add(i.date, '💰', 'ok');
   return ev;
 }
@@ -106,7 +128,7 @@ export function calendarioHtml(datos, hoy, mk = ymKey(hoy)) {
   filas += '</tr>';
   return `<div style="margin-bottom:16px"><div style="font-weight:700;text-transform:capitalize;margin:0 0 6px">${MESES_L[m - 1]} ${y}</div>`
     + `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${filas}</table>`
-    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💰 nómina · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo / te depositan · Azul: hoy</div></div>`;
+    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💰 nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo / te depositan · Azul: hoy</div></div>`;
 }
 
 // Arma el correo. Devuelve null si no hay nada que avisar.
@@ -170,6 +192,9 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       const dd = diffDays(dueOf(ymKey(hoy), Number(r.diaInicio) || 1), hoy);
       if (dd >= 0 && dd <= ventana) items.push({ n: 1, orden: 45 + dd, sec: 'Rendimientos: hoy toca empezar', t: `${esc(r.nombre)} — ${dd === 0 ? 'hoy' : 'en ' + dd + ' día(s)'}: ${esc(r.condicion || 'condición del mes')}` });
     }
+    for (const e of estadosPendientes(pagos, hoy)) {
+      items.push({ n: 1, orden: 40 - Math.min(e.dias, 30) / 100, sec: 'Estados de cuenta por revisar', t: `${esc(e.p.nombre)} — corte del ${fmtFecha(e.corte)}, pendiente desde el ${fmtFecha(e.rev)} (${e.dias} día(s)). Mándaselo a Claude y márcalo como revisado.` });
+    }
     for (const x of cobrar.filter(x => x.estatus !== 'cobrado' && x.fechaEsperada)) {
       const dd = diffDays(parse(x.fechaEsperada), hoy);
       if (dd > ventana) continue;
@@ -185,6 +210,9 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
         if ((r.tipoCond || 'ninguna') === 'ninguna' || f.getDate() !== (Number(r.diaInicio) || 1)) continue;
         if (ymKey(f) === ymKey(hoy) && estadoRend(r, hoy).hecho) continue;
         ag.push({ d, t: `${et} · 🌱 ${esc(r.nombre)}: ${esc(r.condicion || "condición del mes")}` });
+      }
+      for (const p of pagos.filter(p => p.activo !== false && p.corte)) {
+        for (const k of [-1, 0]) { const mk = addMonths(ymKey(f), k); if (mk >= ESTADOS_DESDE && !(p.estados || []).includes(mk) && ymd(revisionDe(p, mk)) === fk) ag.push({ d, t: `${et} · 📄 ${esc(p.nombre)}: revisar estado de cuenta` }); }
       }
       for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · 🎟 vence ${esc(c.nombre)}` });
       for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });

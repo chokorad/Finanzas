@@ -1,6 +1,6 @@
 // Pruebas de la lógica de avisos: node prueba.mjs
 import assert from 'node:assert/strict';
-import { armarAviso, ciclos, ahoraLocal, slotDe } from './logica.mjs';
+import { armarAviso, ciclos, ahoraLocal, slotDe, revisionDe, estadosPendientes } from './logica.mjs';
 const D = (y, m, d) => new Date(y, m - 1, d);
 const pagos = [
   { nombre: 'LikeU', dia: 23, avisoDias: 5, desde: '2026-11', pagados: [] },
@@ -109,5 +109,20 @@ ok('nómina: sale en el calendario del correo y no dispara correo por sí sola',
   assert.match(am.html, /Depósito de nómina/);                        // 10-nov entra en "Próximos 7 días"
   assert.equal(armarAviso({}, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' }), null);   // solo quincena cerca: no manda correo
   assert.match(armarAviso({}, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' }).asunto, /todo en orden/);
+});
+ok('estados de cuenta: revisión 2 días tras el corte, fin de semana -> viernes', () => {
+  const tj = [{ nombre: 'LikeU', dia: 23, corte: 4 }, { nombre: 'Gold', dia: 29, corte: 11 }, { nombre: 'Amex', dia: 11, corte: 22 }, { nombre: 'Mercado Pago', dia: 17, corte: 7 }];
+  const f = (p, mk) => { const d = revisionDe(p, mk); return `${d.getMonth() + 1}-${d.getDate()}`; };
+  assert.equal(f(tj[0], '2026-11'), '11-6'); assert.equal(f(tj[1], '2026-11'), '11-13');
+  assert.equal(f(tj[2], '2026-11'), '11-24'); assert.equal(f(tj[3], '2026-11'), '11-9');   // corte 7-nov sábado -> revisión lun 9
+  assert.equal(f(tj[3], '2027-01'), '1-8');                                                  // 9-ene-2027 sábado -> viernes 8
+  assert.equal(f(tj[0], '2026-12'), '12-4');                         // 6-dic domingo -> viernes 4
+  const p = estadosPendientes(tj, D(2026, 11, 12));
+  assert.deepEqual(p.map(x => x.p.nombre).sort(), ['LikeU', 'Mercado Pago']);
+  tj[0].estados = ['2026-11'];
+  assert.deepEqual(estadosPendientes(tj, D(2026, 11, 12)).map(x => x.p.nombre), ['Mercado Pago']);
+  const r = armarAviso({ pagos: tj }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' });
+  assert.match(r.html, /Estados de cuenta por revisar/); assert.match(r.html, /Mercado Pago/); assert.match(r.html, /📄/);
+  assert.doesNotMatch(armarAviso({ pagos: tj }, { hoy: D(2026, 11, 12), dow: 4, slot: 'pm' })?.html || '', /Estados de cuenta/);
 });
 console.log('TODAS LAS PRUEBAS PASARON');

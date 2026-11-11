@@ -59,12 +59,12 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v14 · 10 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v15 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
-const S = { pagos: [], rend: [], cup: [], cobrar: [] };
+const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [] };
 const cargado = { pagos: false, rend: false };
 let uid = null, unsubs = [];
-const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar' };
+const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar', jarras: 'finanzas_jarras', metas: 'finanzas_metas' };
 const ref = (k, id) => id ? doc(db, 'users', uid, COL[k], id) : collection(db, 'users', uid, COL[k]);
 
 function escuchar() {
@@ -128,6 +128,7 @@ function listaHoy(hoy) {
     if (c.meta) { if (!c.usado && !e.vencido && (c.porActivar || e.pronto)) out.push({ nivel: 1, orden: 55, tipo: 'promo', c, e }); }
     else if (e.pronto) out.push({ nivel: e.dd <= 1 ? 0 : 1, orden: e.dd, tipo: 'cup', c, e });
   }
+  for (const e of estadosPendientes(S.pagos, hoy)) out.push({ nivel: 1, orden: 70, tipo: 'estado', e });
   for (const x of S.cobrar.filter(x => x.estatus !== 'cobrado')) {
     const dias = diffDays(hoy, parse(x.desde || ymd(hoy)));
     if (dias >= 7 || x.porDefinir) out.push({ nivel: 1, orden: x.porDefinir ? 79 : 80, tipo: 'cobrar', x, dias });
@@ -148,6 +149,9 @@ function vistaHoyLista(lista, hoy) {
     if (u.tipo === 'rend') return `<div class="card amb"><div class="fila"><div><div class="t">${esc(u.r.nombre)}</div>
       <small>${esc(u.r.condicion || '')}</small><br><span class="tag amb">${u.e.tipo === 'contador' ? u.e.progreso + '/' + (u.r.meta || 1) : 'falta este mes'}</span></div>
       <div class="acciones">${u.e.tipo === 'contador' ? `<button data-act="rend-mas" data-id="${u.r.id}">+1</button>` : `<button data-act="rend-toggle" data-id="${u.r.id}">Hecho</button>`}</div></div></div>`;
+    if (u.tipo === 'estado') return `<div class="card amb"><div class="fila"><div><div class="t">📄 ${esc(u.e.p.nombre)}</div>
+      <span class="tag amb">estado de cuenta pendiente</span> <small>corte ${fmtFecha(u.e.corte)} · desde ${fmtFecha(u.e.rev)} (${u.e.dias} d)</small></div>
+      <div class="acciones"><button data-act="estado-ok" data-id="${u.e.p.id}" data-mk="${u.e.mk}">Revisado</button></div></div></div>`;
     if (u.tipo === 'promo') return `<div class="card amb"><div class="fila"><div><div class="t">🎟 ${esc(nomCup(u.c))}</div>
       <span class="tag amb">${u.c.porActivar ? 'actívala antes de gastar' : (u.e.dd == null ? 'en curso' : 'vence en ' + u.e.dd + ' d')}</span>
       <small>Llevas ${MXN(u.c.gastado || 0)} · faltan ${MXN(Math.max(0, u.c.meta - (u.c.gastado || 0)))}</small></div>
@@ -161,7 +165,7 @@ function vistaHoyLista(lista, hoy) {
   }).join('');
 }
 
-function vistaPagos(hoy) {
+function vistaPagosBase(hoy) {
   const items = S.pagos.slice().sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
   const filas = items.map(p => {
     const c = cicloMostrado(p, hoy);
@@ -181,7 +185,7 @@ function vistaPagos(hoy) {
   return `<div class="barra"><button class="sec" data-act="pago-nuevo">＋ Nuevo pago</button></div>` + (filas || '<div class="vacio">Sin pagos.</div>');
 }
 
-function vistaRend(hoy) {
+function cuentasHtml(hoy) {
   const filas = S.rend.slice().sort((a, b) => (b.tasa || 0) - (a.tasa || 0)).map(r => {
     const e = estadoRend(r, hoy);
     const estado = e.tipo === 'ninguna' ? '<span class="tag ok">sin condición</span>'
@@ -192,13 +196,142 @@ function vistaRend(hoy) {
       : e.tipo === 'check' ? `<button class="${e.hecho ? 'sec' : ''}" data-act="rend-toggle" data-id="${r.id}">${e.hecho ? 'Deshacer' : 'Hecho'}</button>` : '';
     return `<div class="card ${e.hecho ? 'ok' : e.avisar ? 'amb' : ''}"><div class="fila"><div>
       <div class="t">${esc(r.nombre)} · ${r.tasa ?? '?'}%</div>
-      ${estado}<span class="tag ${r.ipab ? 'ok' : 'rojo'}">${r.ipab ? 'IPAB' : 'sin IPAB'}</span>
-      <small>${r.tope ? 'tope ' + MXN(r.tope) : ''} ${r.saldo ? '· tienes ' + MXN(r.saldo) : ''}</small>
+      ${estado}${r.efectivo ? '' : `<span class="tag ${r.ipab ? 'ok' : 'rojo'}">${r.ipab ? 'IPAB' : 'sin IPAB'}</span>`}
+      <small>${r.tope ? 'tope ' + MXN(r.tope) : ''} ${r.saldo != null ? '· tienes ' + MXN(r.saldo) : ''}</small>
       <div class="nota">${esc(r.condicion || '')}</div></div>
       <div class="acciones">${accion}<button class="sec chico" data-act="rend-editar" data-id="${r.id}">✎</button></div></div></div>`;
   }).join('');
-  return `<div class="barra"><button class="sec" data-act="rend-nuevo">＋ Nueva cuenta</button></div>` + (filas || '<div class="vacio">Sin cuentas.</div>')
-    + `<p class="mute"><small>El avance se reinicia solo cada mes y te avisan por correo desde el día indicado en cada cuenta.</small></p>`;
+  return (filas || '<div class="vacio">Sin cuentas.</div>')
+    + `<p class="mute"><small>El avance de las condiciones se reinicia solo cada mes y te avisan por correo desde el día indicado en cada cuenta.</small></p>`;
+}
+
+function vistaPagos(hoy) {
+  const tarj = S.pagos.filter(p => p.activo !== false && p.corte).sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
+  let est = '';
+  if (tarj.length) {
+    const pend = estadosPendientes(S.pagos, hoy);
+    est = '<h2>Estados de cuenta</h2>' + tarj.map(p => {
+      const mios = pend.filter(e => e.p.id === p.id);
+      let prox = null;
+      for (const k of [0, 1]) { const mk = addMonths(ymKey(hoy), k), r = revisionDe(p, mk); if (r >= hoy && mk >= ESTADOS_DESDE) { prox = r; break; } }
+      const hist = (p.estados || []).slice().sort().slice(-4).map(m => `<span class="tag ok">✅ ${MESES[+m.slice(5) - 1]}</span>`).join(' ');
+      return `<div class="card ${mios.length ? 'amb' : ''}"><div class="fila"><div><div class="t">📄 ${esc(p.nombre)}</div>
+        ${mios.length ? mios.map(e => `<span class="tag amb">pendiente: corte ${fmtFecha(e.corte)} · desde ${fmtFecha(e.rev)}</span>`).join(' ') : '<span class="tag ok">al corriente</span>'}
+        <small>corte día ${p.corte}${prox ? ' · próxima revisión ' + fmtFecha(prox) : ''}</small>${hist ? '<br>' + hist : ''}</div>
+        <div class="acciones">${mios.map(e => `<button data-act="estado-ok" data-id="${p.id}" data-mk="${e.mk}">Revisado ${MESES[+e.mk.slice(5) - 1]}</button>`).join('')}</div></div></div>`;
+    }).join('');
+  }
+  return vistaPagosBase(hoy) + est;
+}
+
+// ---------- pestaña Dinero (capital total, jarras, cuentas) ----------
+const esLargo = j => /largo plazo/i.test(j.nombre);
+function vistaRend(hoy) {
+  if (cargado.jarras && !S.jarras.length && cargado.rend) {
+    return `<div class="vacio">Aún no hay jarras.<br><br><button id="btn-dinero">Cargar mis cifras (10 nov 2026)</button><br><small>Cuentas, jarras, metas, tarjeta Mercado Pago y días de corte. Provisional: luego lo ajustas.</small></div>` + cuentasHtml(hoy);
+  }
+  const cuentas = S.rend.filter(r => r.saldo != null);
+  const total = cuentas.reduce((s, r) => s + (Number(r.saldo) || 0), 0);
+  const estim = cuentas.reduce((s, r) => s + (r.tasa ? Math.min(Number(r.saldo) || 0, Number(r.tope) || Infinity) * r.tasa / 100 / 12 : 0), 0);
+  const jars = S.jarras.slice().sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
+  const asignado = jars.reduce((s, j) => s + (Number(j.monto) || 0), 0), libre = Math.round((total - asignado) * 100) / 100;
+  const pct = m => total > 0 ? Math.round((m / total) * 100) : 0;
+  const metas = S.metas.slice().sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
+  const metasHtml = j => {
+    if (!esLargo(j) || !metas.length) return '';
+    const m0 = Number(j.monto) || 0, suma = metas.reduce((s, m) => s + (Number(m.objetivo) || 0), 0);
+    return metas.map(m => { const p = Math.round(m0 / (m.objetivo || 1) * 100);
+      return `<div style="margin-top:8px"><small><b>${esc(m.nombre)}</b> · ${MXN(m.objetivo)} · ${p >= 100 ? '✅ cubierta (sobran ' + MXN(m0 - m.objetivo) + ')' : p + '% · faltan ' + MXN(m.objetivo - m0)}</small>
+        <div class="prog"><div style="width:${Math.max(0, Math.min(100, p))}%"></div></div>
+        <button class="sec chico" data-act="meta-editar" data-id="${m.id}">✎ ${esc(m.nombre)}</button></div>`; }).join('')
+      + (metas.length > 1 ? `<div style="margin-top:8px"><small>Todas juntas (${MXN(suma)}): ${Math.round(m0 / suma * 100)}%</small></div>` : '');
+  };
+  const jarHtml = j => `<div class="card ${j.aparte ? 'gris' : ''}"><div class="fila"><div>
+      <div class="t">${j.aparte ? '💳' : '🫙'} ${esc(j.nombre)}</div>
+      <span class="tag">${MXN(j.monto || 0)}</span> <small>${pct(j.monto || 0)}% del total${j.aparte ? ' · aparte de las jarras' : ''}</small>
+      ${j.nota ? `<div class="nota">${esc(j.nota)}</div>` : ''}${metasHtml(j)}</div>
+      <div class="acciones"><button data-act="jar-mas" data-id="${j.id}">＋</button><button class="sec" data-act="jar-menos" data-id="${j.id}">−</button><button class="sec chico" data-act="jar-editar" data-id="${j.id}">✎</button></div></div></div>`;
+  return `<div class="cal" style="text-align:center"><small class="mute">Capital total</small>
+      <div style="font-size:2rem;font-weight:800">${MXN(total)}</div>
+      <small>Rendimiento estimado: <b>${MXN(Math.round(estim))}</b> al mes · ${MXN(Math.round(estim * 12))} al año <span class="mute">(si cumples las condiciones)</span></small></div>
+    <div class="barra"><button data-act="cuentas-saldos">Actualizar saldos</button><button class="sec" data-act="jar-mover">Mover entre jarras</button><button class="sec" data-act="jar-nueva">＋ Jarra</button><button class="sec" data-act="meta-nueva">＋ Meta</button></div>
+    <h2>Jarras</h2>${jars.map(jarHtml).join('')}
+    <div class="card ${Math.abs(libre) < 1 ? 'ok' : 'rojo'}"><div class="t">Sin asignar: ${MXN(libre)}</div>
+      <small>${Math.abs(libre) < 1 ? 'Todo tu dinero está en una jarra ✔' : libre > 0 ? 'Te sobra dinero sin jarra: repártelo.' : 'Las jarras suman más que tus cuentas: revisa saldos o montos.'}</small></div>
+    <h2>Cuentas</h2><div class="barra"><button class="sec" data-act="rend-nuevo">＋ Nueva cuenta</button></div>${cuentasHtml(hoy)}`;
+}
+
+function formSaldos() {
+  const cs = S.rend.slice().sort((a, b) => (b.saldo || 0) - (a.saldo || 0));
+  formulario({
+    titulo: 'Actualizar saldos',
+    extraHtml: '<p class="mute"><small>Pon lo que tienes hoy en cada cuenta. Si dejas uno vacío no cambia.</small></p>',
+    valores: Object.fromEntries(cs.map(r => ['c_' + r.id, r.saldo ?? ''])),
+    campos: cs.map(r => ({ k: 'c_' + r.id, label: r.nombre, type: 'number' })),
+    onSave: async d => {
+      const b = writeBatch(db);
+      for (const r of cs) { const v = d['c_' + r.id]; if (v != null && v !== r.saldo) b.update(ref('rend', r.id), { saldo: v }); }
+      await b.commit(); cerrar(); toast('Saldos actualizados');
+    },
+  });
+}
+function formMonto(j, signo) {
+  formulario({
+    titulo: (signo > 0 ? 'Apartar en ' : 'Usar de ') + j.nombre,
+    valores: {},
+    extraHtml: `<p class="mute"><small>Hoy hay ${MXN(j.monto || 0)}. ${signo > 0 ? 'Sube la jarra' : 'Baja la jarra'} (acuérdate de que el dinero salga de alguna cuenta).</small></p>`,
+    campos: [{ k: 'monto', label: 'Monto ($)', type: 'number' }],
+    onSave: async d => { if (!d.monto) return toast('Pon un monto'); await updateDoc(ref('jarras', j.id), { monto: Math.round(((j.monto || 0) + signo * d.monto) * 100) / 100 }); cerrar(); toast('Listo'); },
+  });
+}
+function formMover() {
+  const opts = S.jarras.slice().sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99)).map(j => [j.id, j.nombre]);
+  formulario({
+    titulo: 'Mover entre jarras', valores: { de: opts[0]?.[0], a: opts[1]?.[0] },
+    campos: [{ k: 'de', label: 'De', type: 'select', opts }, { k: 'a', label: 'A', type: 'select', opts }, { k: 'monto', label: 'Monto ($)', type: 'number' }],
+    onSave: async d => {
+      if (!d.monto || d.de === d.a) return toast('Elige dos jarras distintas y un monto');
+      const A = byId('jarras', d.de), B = byId('jarras', d.a), b = writeBatch(db);
+      b.update(ref('jarras', A.id), { monto: Math.round(((A.monto || 0) - d.monto) * 100) / 100 });
+      b.update(ref('jarras', B.id), { monto: Math.round(((B.monto || 0) + d.monto) * 100) / 100 });
+      await b.commit(); cerrar(); toast('Movido');
+    },
+  });
+}
+function formJarra(j) {
+  const nuevo = !j;
+  formulario({
+    titulo: nuevo ? 'Nueva jarra' : 'Editar jarra',
+    valores: j || { monto: 0, orden: S.jarras.length + 1 },
+    campos: [{ k: 'nombre', label: 'Nombre' }, { k: 'monto', label: 'Monto ($)', type: 'number' }, { k: 'nota', label: 'Nota', type: 'textarea' }],
+    onSave: async d => { d.monto = d.monto || 0; if (nuevo) await addDoc(ref('jarras'), { ...d, orden: S.jarras.length + 1 }); else await updateDoc(ref('jarras', j.id), d); cerrar(); },
+    onDelete: nuevo ? null : () => deleteDoc(ref('jarras', j.id)),
+  });
+}
+function formMeta(m) {
+  const nuevo = !m;
+  formulario({
+    titulo: nuevo ? 'Nueva meta' : 'Editar meta', valores: m || {},
+    campos: [{ k: 'nombre', label: 'Nombre (Medellín, Carro…)' }, { k: 'objetivo', label: 'Cuánto cuesta ($)', type: 'number' }],
+    onSave: async d => { if (nuevo) await addDoc(ref('metas'), { ...d, orden: S.metas.length + 1 }); else await updateDoc(ref('metas', m.id), d); cerrar(); },
+    onDelete: nuevo ? null : () => deleteDoc(ref('metas', m.id)),
+  });
+}
+async function sembrarDinero() {
+  const b = writeBatch(db), mk = ymKey(today());
+  const saldos = { Revolut: 25000, 'Mercado Pago': 25000, Nu: 25000, Mifel: 13000 };
+  for (const r of S.rend) for (const [pref, v] of Object.entries(saldos)) if (r.nombre.startsWith(pref)) b.update(ref('rend', r.id), { saldo: v });
+  if (!S.rend.some(r => /santander/i.test(r.nombre))) b.set(doc(ref('rend')), { nombre: 'Santander', tasa: 0, saldo: 18335, ipab: true, tipoCond: 'ninguna', condicion: 'Cuenta para pagar tarjetas. Sin rendimiento.' });
+  if (!S.rend.some(r => r.efectivo)) b.set(doc(ref('rend')), { nombre: 'Efectivo', tasa: 0, saldo: 9000, efectivo: true, ipab: false, tipoCond: 'ninguna', condicion: 'Dinero en efectivo. Sin rendimiento.' });
+  [['Necesidades', 15000, 'Colchón: 2 meses de gasto ($7,500 al mes).'], ['Educación', 1500], ['Diversión', 1500], ['Dar', 1500], ['Libertad financiera', 0, 'Inversión que no se toca. Vacía por ahora.'], ['Ahorro a largo plazo para gastar', 68835, 'De aquí salen Medellín y el carro.']]
+    .forEach(([nombre, monto, nota], i) => b.set(doc(ref('jarras')), { nombre, monto, nota: nota || '', orden: i + 1 }));
+  b.set(doc(ref('jarras')), { nombre: 'Tarjetas', monto: 27000, aparte: true, nota: 'Ya comprometido para pagar LikeU y Gold.', orden: 7 });
+  b.set(doc(ref('metas')), { nombre: 'Medellín', objetivo: 62200, orden: 1 });
+  b.set(doc(ref('metas')), { nombre: 'Carro', objetivo: 120000, orden: 2 });
+  const cortes = { LikeU: 4, Gold: 11, Amex: 22 };
+  for (const p of S.pagos) for (const [k, c] of Object.entries(cortes)) if (p.nombre.includes(k)) b.update(ref('pagos', p.id), { corte: c });
+  if (!S.pagos.some(p => /mercado/i.test(p.nombre))) b.set(doc(ref('pagos')), { nombre: 'Mercado Pago', dia: 17, avisoDias: 5, corte: 7, nota: 'Corte día 7. Si el 17 cae en fin de semana, el límite pasa al siguiente día hábil.', activo: true, pagados: [], estados: [], desde: mk, orden: S.pagos.length + 1 });
+  await b.commit(); toast('Cifras cargadas');
 }
 
 const nomCup = c => String(c.nombre).startsWith('Amex Platinum: $500') ? 'Amex–Walmart' : c.nombre;
@@ -240,6 +373,23 @@ function vistaCobrar(hoy) {
   return `<div class="barra"><button data-act="cob-rapida">🎤 Nota rápida</button><button class="sec" data-act="cob-nuevo">＋ Nuevo</button></div>`
     + (abiertos.length ? `<p class="mute">Abiertos: <b>${abiertos.length}</b> · ${MXN(total)}</p>` : '')
     + (filas || '<div class="vacio">Nada por cobrar. Aquí van reembolsos, cosas que compraste para vender, etc.</div>');
+}
+
+// ---------- estados de cuenta: revisar 2 días después del corte (si cae en fin de semana, el viernes anterior) ----------
+const ESTADOS_DESDE = '2026-11';   // primer mes de corte que se lleva en la app
+const ajustaFinde = d => { const w = d.getDay(); return w === 6 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1) : w === 0 ? new Date(d.getFullYear(), d.getMonth(), d.getDate() - 2) : d; };
+const revisionDe = (p, mk) => ajustaFinde(dueOf(mk, (Number(p.corte) || 1) + 2));
+function estadosPendientes(pagos, hoy) {
+  const out = [];
+  for (const p of pagos.filter(p => p.activo !== false && p.corte)) {
+    for (const k of [-2, -1, 0]) {
+      const mk = addMonths(ymKey(hoy), k);
+      if (mk < ESTADOS_DESDE || (p.estados || []).includes(mk)) continue;
+      const rev = revisionDe(p, mk), dias = diffDays(hoy, rev);
+      if (dias >= 0) out.push({ p, mk, rev, dias, corte: dueOf(mk, p.corte) });
+    }
+  }
+  return out.sort((a, b) => b.dias - a.dias);
 }
 
 // ---------- calendario (pestaña Hoy) ----------
@@ -285,6 +435,11 @@ function eventosMes(mk, hoy) {
     const dd = diffDays(parse(x.fechaEsperada), hoy);
     add(parse(x.fechaEsperada), '💵', `Cobro esperado: ${x.concepto}${x.monto ? ' · ' + MXN(x.monto) : ''}${dd < 0 ? ' — ya pasó la fecha' : ''}`, dd < 0 ? 'rojo' : 'amb');
   }
+  for (const p of S.pagos.filter(p => p.activo !== false && p.corte)) {
+    if (mk < ESTADOS_DESDE) continue;
+    const rev = revisionDe(p, mk), ok = (p.estados || []).includes(mk);
+    add(rev, '📄', `${p.nombre}: revisar estado de cuenta (corte día ${p.corte})${ok ? ' — ✅ revisado' : ''}`, ok ? 'ok' : rev < hoy ? 'amb' : nivelDd(diffDays(rev, hoy)));
+  }
   for (const i of ingresosMes(mk)) add(i.date, '💰', i.txt, 'ok');
   return ev;
 }
@@ -307,7 +462,7 @@ function vistaCal(hoy) {
     <div><span class="t" style="text-transform:capitalize">${MESES_L[m - 1]} ${y}</span> ${mk !== ymKey(hoy) ? '<button class="sec chico" data-act="cal-hoy">Hoy</button>' : ''}</div>
     <button class="sec chico" data-act="cal-next">▶</button></div>
     <div class="cal-g">${celdas}</div>${detalle}
-    <div class="leyenda">💰 depósito de nómina · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
+    <div class="leyenda">💰 depósito de nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
 }
 
 // ---------- modal / formularios ----------
@@ -355,6 +510,7 @@ function formPago(p) {
       { k: 'diaInicio', label: 'Avisar desde el día… (solo si es una ventana, ej. colegiatura 1)', type: 'number' },
       { k: 'avisoDias', label: 'Días de anticipación (si no hay ventana)', type: 'number' },
       { k: 'monto', label: 'Monto aproximado (opcional)', type: 'number' },
+      { k: 'corte', label: 'Día de corte (tarjetas: te recuerda revisar el estado de cuenta 2 días después)', type: 'number' },
       { k: 'nota', label: 'Nota', type: 'textarea' },
     ],
     onSave: async d => {
@@ -587,6 +743,7 @@ async function sembrar() {
 // ---------- acciones ----------
 document.addEventListener('click', async e => {
   if (e.target.id === 'btn-seed') { e.target.disabled = true; await sembrar(); return; }
+  if (e.target.id === 'btn-dinero') { e.target.disabled = true; await sembrarDinero(); return; }
   const el = e.target.closest('[data-act]'); if (!el) return;
   const { act, id, mk, d } = el.dataset, hoy = today();
   try {
@@ -615,6 +772,15 @@ document.addEventListener('click', async e => {
     if (act === 'cup-usado') { await updateDoc(ref('cup', id), { usado: true }); return toast('Cupón marcado como usado'); }
     if (act === 'cob-nuevo') return formCobrar();
     if (act === 'cob-rapida') return formRapida();
+    if (act === 'jar-mas') return formMonto(byId('jarras', id), 1);
+    if (act === 'jar-menos') return formMonto(byId('jarras', id), -1);
+    if (act === 'jar-editar') return formJarra(byId('jarras', id));
+    if (act === 'jar-nueva') return formJarra();
+    if (act === 'jar-mover') return formMover();
+    if (act === 'meta-nueva') return formMeta();
+    if (act === 'meta-editar') return formMeta(byId('metas', id));
+    if (act === 'cuentas-saldos') return formSaldos();
+    if (act === 'estado-ok') { await updateDoc(ref('pagos', id), { estados: arrayUnion(mk) }); return toast('Estado de cuenta revisado ✔'); }
     if (act === 'cob-editar') return formCobrar(byId('cobrar', id));
     if (act === 'cob-cobrado') { await updateDoc(ref('cobrar', id), { estatus: 'cobrado', cobradoFecha: ymd(hoy) }); return toast('¡Cobrado!'); }
   } catch (err) { console.error(err); toast('Error: ' + (err.code || err.message)); }
