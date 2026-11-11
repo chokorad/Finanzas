@@ -59,7 +59,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v16 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v17 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [] };
 const cargado = { pagos: false, rend: false };
@@ -214,7 +214,7 @@ function vistaPagos(hoy) {
       const mios = pend.filter(e => e.p.id === p.id);
       let prox = null;
       for (const k of [0, 1]) { const mk = addMonths(ymKey(hoy), k), r = revisionDe(p, mk); if (r >= hoy && mk >= ESTADOS_DESDE) { prox = r; break; } }
-      const hist = (p.estados || []).slice().sort().slice(-4).map(m => `<span class="tag ok">✅ ${MESES[+m.slice(5) - 1]}</span>`).join(' ');
+      const hist = (p.estados || []).slice().sort().slice(-4).map(m => `<button class="sec chico" data-act="estado-deshacer" data-id="${p.id}" data-mk="${m}">✅ ${MESES[+m.slice(5) - 1]} ↩</button>`).join(' ');
       return `<div class="card ${mios.length ? 'amb' : ''}"><div class="fila"><div><div class="t">📄 ${esc(p.nombre)}</div>
         ${mios.length ? mios.map(e => `<span class="tag amb">pendiente: corte ${fmtFecha(e.corte)} · desde ${fmtFecha(e.rev)}</span>`).join(' ') : '<span class="tag ok">al corriente</span>'}
         <small>corte día ${p.corte}${prox ? ' · próxima revisión ' + fmtFecha(prox) : ''}</small>${hist ? '<br>' + hist : ''}</div>
@@ -785,7 +785,16 @@ document.addEventListener('click', async e => {
     if (act === 'meta-nueva') return formMeta();
     if (act === 'meta-editar') return formMeta(byId('metas', id));
     if (act === 'cuentas-saldos') return formSaldos();
-    if (act === 'estado-ok') { await updateDoc(ref('pagos', id), { estados: arrayUnion(mk) }); return toast('Estado de cuenta revisado ✔'); }
+    if (act === 'estado-ok') {
+      const p = byId('pagos', id), mes = MESES[+mk.slice(5) - 1];
+      if (!confirm(`¿Ya revisaste el estado de cuenta de ${p ? p.nombre : 'la tarjeta'} (${mes})?\n\nSe marcará como revisado. Lo puedes deshacer tocando el ✅ ${mes}.`)) return;
+      await updateDoc(ref('pagos', id), { estados: arrayUnion(mk) }); return toast('Estado de cuenta revisado ✔');
+    }
+    if (act === 'estado-deshacer') {
+      const p = byId('pagos', id), mes = MESES[+mk.slice(5) - 1];
+      if (!confirm(`¿Quitar la revisión de ${mes} de ${p ? p.nombre : 'la tarjeta'}? Volverá a quedar pendiente.`)) return;
+      await updateDoc(ref('pagos', id), { estados: arrayRemove(mk) }); return toast('Revisión deshecha');
+    }
     if (act === 'cob-editar') return formCobrar(byId('cobrar', id));
     if (act === 'cob-cobrado') { await updateDoc(ref('cobrar', id), { estatus: 'cobrado', cobradoFecha: ymd(hoy) }); return toast('¡Cobrado!'); }
   } catch (err) { console.error(err); toast('Error: ' + (err.code || err.message)); }

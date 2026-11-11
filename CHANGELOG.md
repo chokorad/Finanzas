@@ -1,3 +1,6 @@
+## v17 (11 nov 2026)
+- Estados de cuenta: "Revisado" ahora pide confirmacion y el check del mes (✅ nov ↩) se puede tocar para deshacer.
+
 ## v16 (11 nov 2026)
 - Dinero: Cuentas primero y luego Jarras, ambas como secciones plegables (cierran por defecto; recuerdan su estado entre actualizaciones).
 
