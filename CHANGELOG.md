@@ -1,3 +1,6 @@
+## v16 (11 nov 2026)
+- Dinero: Cuentas primero y luego Jarras, ambas como secciones plegables (cierran por defecto; recuerdan su estado entre actualizaciones).
+
 # CHANGELOG
 
 ## 2026-11-09 — Spend-goal promos + new icon

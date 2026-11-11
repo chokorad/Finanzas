@@ -59,7 +59,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v15 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v16 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [] };
 const cargado = { pagos: false, rend: false };
@@ -226,6 +226,7 @@ function vistaPagos(hoy) {
 
 // ---------- pestaña Dinero (capital total, jarras, cuentas) ----------
 const esLargo = j => /largo plazo/i.test(j.nombre);
+const dineroAbierto = { cuentas: false, jarras: false };
 function vistaRend(hoy) {
   if (cargado.jarras && !S.jarras.length && cargado.rend) {
     return `<div class="vacio">Aún no hay jarras.<br><br><button id="btn-dinero">Cargar mis cifras (10 nov 2026)</button><br><small>Cuentas, jarras, metas, tarjeta Mercado Pago y días de corte. Provisional: luego lo ajustas.</small></div>` + cuentasHtml(hoy);
@@ -255,11 +256,15 @@ function vistaRend(hoy) {
       <div style="font-size:2rem;font-weight:800">${MXN(total)}</div>
       <small>Rendimiento estimado: <b>${MXN(Math.round(estim))}</b> al mes · ${MXN(Math.round(estim * 12))} al año <span class="mute">(si cumples las condiciones)</span></small></div>
     <div class="barra"><button data-act="cuentas-saldos">Actualizar saldos</button><button class="sec" data-act="jar-mover">Mover entre jarras</button><button class="sec" data-act="jar-nueva">＋ Jarra</button><button class="sec" data-act="meta-nueva">＋ Meta</button></div>
-    <h2>Jarras</h2>${jars.map(jarHtml).join('')}
-    <div class="card ${Math.abs(libre) < 1 ? 'ok' : 'rojo'}"><div class="t">Sin asignar: ${MXN(libre)}</div>
-      <small>${Math.abs(libre) < 1 ? 'Todo tu dinero está en una jarra ✔' : libre > 0 ? 'Te sobra dinero sin jarra: repártelo.' : 'Las jarras suman más que tus cuentas: revisa saldos o montos.'}</small></div>
-    <h2>Cuentas</h2><div class="barra"><button class="sec" data-act="rend-nuevo">＋ Nueva cuenta</button></div>${cuentasHtml(hoy)}`;
+    <details class="sec-tog" data-tog="cuentas" ${dineroAbierto.cuentas ? 'open' : ''}><summary><h2>Cuentas <small class="mute">· ${cuentas.length} · ${MXN(total)}</small></h2></summary>
+      <div class="barra"><button class="sec" data-act="rend-nuevo">＋ Nueva cuenta</button></div>${cuentasHtml(hoy)}</details>
+    <details class="sec-tog" data-tog="jarras" ${dineroAbierto.jarras ? 'open' : ''}><summary><h2>Jarras <small class="mute">· ${jars.length} · ${Math.abs(libre) < 1 ? 'todo asignado ✔' : 'sin asignar ' + MXN(libre)}</small></h2></summary>
+      ${jars.map(jarHtml).join('')}
+      <div class="card ${Math.abs(libre) < 1 ? 'ok' : 'rojo'}"><div class="t">Sin asignar: ${MXN(libre)}</div>
+        <small>${Math.abs(libre) < 1 ? 'Todo tu dinero está en una jarra ✔' : libre > 0 ? 'Te sobra dinero sin jarra: repártelo.' : 'Las jarras suman más que tus cuentas: revisa saldos o montos.'}</small></div></details>`;
 }
+// Recuerda qué secciones de Dinero están abiertas (el render las reconstruye con cada cambio de datos)
+document.addEventListener('toggle', e => { const t = e.target; if (t.dataset && t.dataset.tog) dineroAbierto[t.dataset.tog] = t.open; }, true);
 
 function formSaldos() {
   const cs = S.rend.slice().sort((a, b) => (b.saldo || 0) - (a.saldo || 0));
