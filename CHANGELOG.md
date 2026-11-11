@@ -1,3 +1,7 @@
+## v18 (11 nov 2026)
+- Pagos: secciones plegables (Tarjetas y pagos, Pagos recurrentes, Estados de cuenta).
+- Pagos recurrentes (coleccion finanzas_recurrentes): seguros, suscripciones, gasto hormiga. Total al mes/año, "por confirmar", editar. Boton para cargar los detectados en julio.
+
 ## v17 (11 nov 2026)
 - Estados de cuenta: "Revisado" ahora pide confirmacion y el check del mes (✅ nov ↩) se puede tocar para deshacer.
 

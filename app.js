@@ -59,12 +59,12 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v17 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v18 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
-const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [] };
+const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [], recur: [] };
 const cargado = { pagos: false, rend: false };
 let uid = null, unsubs = [];
-const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar', jarras: 'finanzas_jarras', metas: 'finanzas_metas' };
+const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar', jarras: 'finanzas_jarras', metas: 'finanzas_metas', recur: 'finanzas_recurrentes' };
 const ref = (k, id) => id ? doc(db, 'users', uid, COL[k], id) : collection(db, 'users', uid, COL[k]);
 
 function escuchar() {
@@ -205,12 +205,69 @@ function cuentasHtml(hoy) {
     + `<p class="mute"><small>El avance de las condiciones se reinicia solo cada mes y te avisan por correo desde el día indicado en cada cuenta.</small></p>`;
 }
 
+const FREC = [['mensual', 'Cada mes'], ['bimestral', 'Cada 2 meses'], ['semestral', 'Cada 6 meses'], ['anual', 'Cada año']];
+const CAT_REC = [['seguro', '🛡 Seguro'], ['suscripcion', '📺 Suscripción'], ['hormiga', '🐜 Gasto hormiga'], ['otro', '📌 Otro']];
+const mensualEq = r => { const m = Number(r.monto) || 0; return r.frecuencia === 'anual' ? m / 12 : r.frecuencia === 'semestral' ? m / 6 : r.frecuencia === 'bimestral' ? m / 2 : m; };
+function recurrentesHtml() {
+  const rec = S.recur.filter(r => r.activo !== false).sort((a, b) => mensualEq(b) - mensualEq(a));
+  const mes = rec.reduce((t, r) => t + mensualEq(r), 0), porConf = rec.filter(r => r.confirmar).length;
+  const filas = rec.map(r => {
+    const cat = (CAT_REC.find(c => c[0] === r.categoria) || CAT_REC[3])[1], fr = (FREC.find(f => f[0] === r.frecuencia) || FREC[0])[1].toLowerCase();
+    return `<div class="card ${r.confirmar ? 'amb' : ''}"><div class="fila"><div>
+      <div class="t">${esc(r.nombre)}</div>
+      <span class="tag">${MXN(r.monto || 0)} · ${fr}</span> ${r.confirmar ? '<span class="tag amb">por confirmar</span>' : ''}
+      <small>${cat}${r.medio ? ' · ' + esc(r.medio) : ''}${r.frecuencia !== 'mensual' ? ' · ≈ ' + MXN(Math.round(mensualEq(r))) + '/mes' : ''}</small>
+      ${r.nota ? `<div class="nota">${esc(r.nota)}</div>` : ''}</div>
+      <div class="acciones">${r.confirmar ? `<button data-act="rec-ok" data-id="${r.id}">✔ Es correcto</button>` : ''}<button class="sec chico" data-act="rec-editar" data-id="${r.id}">✎</button></div></div></div>`;
+  }).join('');
+  const vacio = !rec.length ? `<div class="vacio">Aún no hay pagos recurrentes.<br><br><button id="btn-recur">Cargar los que detecté en tus estados</button><br><small>Salen del corte de julio; todos quedan "por confirmar" para que tú me digas cuáles son, cuánto y cada cuándo.</small></div>` : '';
+  return `<details class="sec-tog" data-tog="recur" ${dineroAbierto.recur ? 'open' : ''}><summary><h2>Pagos recurrentes <small class="mute">· ${rec.length}${rec.length ? ' · ≈ ' + MXN(Math.round(mes)) + '/mes' : ''}${porConf ? ' · ' + porConf + ' por confirmar' : ''}</small></h2></summary>
+    ${rec.length ? `<div class="cal" style="text-align:center"><small class="mute">Lo que se va solo cada mes</small><div style="font-size:1.6rem;font-weight:800">${MXN(Math.round(mes))}</div><small>${MXN(Math.round(mes * 12))} al año · revisa cuáles ya no usas</small></div>` : ''}
+    <div class="barra"><button class="sec" data-act="rec-nuevo">＋ Recurrente</button></div>${filas}${vacio}</details>`;
+}
+function formRecurrente(r) {
+  const nuevo = !r;
+  formulario({
+    titulo: nuevo ? 'Nuevo pago recurrente' : 'Editar recurrente',
+    valores: r || { frecuencia: 'mensual', categoria: 'suscripcion' },
+    campos: [
+      { k: 'nombre', label: 'Nombre', ph: 'Seguro, Netflix, Spotify…' },
+      { k: 'monto', label: 'Monto ($) por cobro', type: 'number' },
+      { k: 'frecuencia', label: 'Cada cuándo se cobra', type: 'select', opts: FREC },
+      { k: 'categoria', label: 'Tipo', type: 'select', opts: CAT_REC },
+      { k: 'medio', label: 'Se cobra a… (tarjeta o cuenta)', ph: 'Amex, LikeU, Gold…' },
+      { k: 'nota', label: 'Nota', type: 'textarea' },
+    ],
+    onSave: async d => {
+      if (!d.nombre) return toast('Ponle nombre');
+      if (nuevo) await addDoc(ref('recur'), { ...d, activo: true, confirmar: false }); else await updateDoc(ref('recur', r.id), d);
+      cerrar();
+    },
+    onDelete: nuevo ? null : () => deleteDoc(ref('recur', r.id)),
+  });
+}
+// Detectados en el corte de julio 2026. NO se asume nada: todos quedan "por confirmar".
+async function sembrarRecurrentes() {
+  const b = writeBatch(db);
+  [
+    ['Seguro Zurich Santander', 292.39, 'mensual', 'seguro', 'LikeU 0048', 'Cargo del 16/17-jun. ¿Es mensual? ¿Qué cubre?'],
+    ['Seguro auto (ANA)', 816.23, 'mensual', 'seguro', 'Amex', 'Cargo del 23-jun. ¿Mensual? ¿Cubre el mismo auto que otro seguro?'],
+    ['AXA Seguros (1)', 683.93, 'mensual', 'seguro', 'Amex', 'Cargo del 3-jul. Mismo día que el otro AXA: ¿son dos pólizas distintas?'],
+    ['AXA Seguros (2)', 433.33, 'mensual', 'seguro', 'Amex', 'Cargo del 3-jul, otro monto.'],
+    ['Anualidad Amex Platinum', 4872, 'anual', 'otro', 'Amex', '$4,200 + IVA desde el 22-sep-2026 (antes $3,700). Se difiere a 3 meses.'],
+    ['Navigating Radiology (USD)', 172.74, 'mensual', 'suscripcion', 'LikeU (adicional)', 'Salieron dos cargos seguidos en junio ($172.74 y $436.39). ¿Qué es cada uno?'],
+    ['Imágenes Torácicas (USD)', 299.61, 'mensual', 'suscripcion', 'LikeU (adicional)', 'Cargo del 2-jul (17 USD).'],
+    ['Google · Web Video Cast', 139, 'mensual', 'suscripcion', 'LikeU (adicional)', 'Cargo del 16-jun. ¿Lo usas?'],
+  ].forEach(([nombre, monto, frecuencia, categoria, medio, nota]) => b.set(doc(ref('recur')), { nombre, monto, frecuencia, categoria, medio, nota, confirmar: true, activo: true }));
+  await b.commit(); toast('Cargados: confírmalos uno por uno');
+}
+
 function vistaPagos(hoy) {
   const tarj = S.pagos.filter(p => p.activo !== false && p.corte).sort((a, b) => (a.orden ?? 99) - (b.orden ?? 99));
   let est = '';
   if (tarj.length) {
     const pend = estadosPendientes(S.pagos, hoy);
-    est = '<h2>Estados de cuenta</h2>' + tarj.map(p => {
+    est = tarj.map(p => {
       const mios = pend.filter(e => e.p.id === p.id);
       let prox = null;
       for (const k of [0, 1]) { const mk = addMonths(ymKey(hoy), k), r = revisionDe(p, mk); if (r >= hoy && mk >= ESTADOS_DESDE) { prox = r; break; } }
@@ -220,13 +277,16 @@ function vistaPagos(hoy) {
         <small>corte día ${p.corte}${prox ? ' · próxima revisión ' + fmtFecha(prox) : ''}</small>${hist ? '<br>' + hist : ''}</div>
         <div class="acciones">${mios.map(e => `<button data-act="estado-ok" data-id="${p.id}" data-mk="${e.mk}">Revisado ${MESES[+e.mk.slice(5) - 1]}</button>`).join('')}</div></div></div>`;
     }).join('');
+    est = `<details class="sec-tog" data-tog="estados" ${dineroAbierto.estados ? 'open' : ''}><summary><h2>Estados de cuenta <small class="mute">· ${pend.length ? pend.length + ' pendiente' + (pend.length > 1 ? 's' : '') : 'al corriente ✔'}</small></h2></summary>${est}</details>`;
   }
-  return vistaPagosBase(hoy) + est;
+  const activos = S.pagos.filter(p => p.activo !== false).length;
+  return `<details class="sec-tog" data-tog="pagos" ${dineroAbierto.pagos ? 'open' : ''}><summary><h2>Tarjetas y pagos <small class="mute">· ${activos}</small></h2></summary>${vistaPagosBase(hoy)}</details>`
+    + recurrentesHtml() + est;
 }
 
 // ---------- pestaña Dinero (capital total, jarras, cuentas) ----------
 const esLargo = j => /largo plazo/i.test(j.nombre);
-const dineroAbierto = { cuentas: false, jarras: false };
+const dineroAbierto = { cuentas: false, jarras: false, pagos: true, recur: false, estados: false }; // secciones plegables (Dinero y Pagos)
 function vistaRend(hoy) {
   if (cargado.jarras && !S.jarras.length && cargado.rend) {
     return `<div class="vacio">Aún no hay jarras.<br><br><button id="btn-dinero">Cargar mis cifras (10 nov 2026)</button><br><small>Cuentas, jarras, metas, tarjeta Mercado Pago y días de corte. Provisional: luego lo ajustas.</small></div>` + cuentasHtml(hoy);
@@ -748,6 +808,7 @@ async function sembrar() {
 // ---------- acciones ----------
 document.addEventListener('click', async e => {
   if (e.target.id === 'btn-seed') { e.target.disabled = true; await sembrar(); return; }
+  if (e.target.id === 'btn-recur') { e.target.disabled = true; await sembrarRecurrentes(); return; }
   if (e.target.id === 'btn-dinero') { e.target.disabled = true; await sembrarDinero(); return; }
   const el = e.target.closest('[data-act]'); if (!el) return;
   const { act, id, mk, d } = el.dataset, hoy = today();
@@ -780,6 +841,9 @@ document.addEventListener('click', async e => {
     if (act === 'jar-mas') return formMonto(byId('jarras', id), 1);
     if (act === 'jar-menos') return formMonto(byId('jarras', id), -1);
     if (act === 'jar-editar') return formJarra(byId('jarras', id));
+    if (act === 'rec-nuevo') return formRecurrente(null);
+    if (act === 'rec-editar') return formRecurrente(byId('recur', id));
+    if (act === 'rec-ok') { await updateDoc(ref('recur', id), { confirmar: false }); return toast('Confirmado'); }
     if (act === 'jar-nueva') return formJarra();
     if (act === 'jar-mover') return formMover();
     if (act === 'meta-nueva') return formMeta();
