@@ -61,7 +61,7 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v20 · 12 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v21 · 12 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [], recur: [], cancelar: [] };
 const cargado = { pagos: false, rend: false };
@@ -450,7 +450,8 @@ const TIPOS_BEN = [['cupon', '🎟 Cupón o promo'], ['seguro', '🛡 Seguro'], 
 const icoBen = c => ({ seguro: '🛡', pase: '🎫', tarjeta: '💳', otro: '🎁' }[c.tipo] || '🎟');
 function cardBeneficio(c, hoy) {
   const e = estadoCup(c, hoy);
-  const tag = e.vencido ? '<span class="tag rojo">venció</span>' : e.pronto ? `<span class="tag amb">${e.dd === 0 ? 'renueva HOY' : 'renueva en ' + e.dd + ' d'}</span>` : c.vence ? `<span class="tag">renueva ${fmtFecha(parse(c.vence))}</span>` : '';
+  const porCompletar = c.porDefinir ? '<span class="tag amb">por completar</span> ' : '';
+  const tag = porCompletar + (e.vencido ? '<span class="tag rojo">venció</span>' : e.pronto ? `<span class="tag amb">${e.dd === 0 ? 'renueva HOY' : 'renueva en ' + e.dd + ' d'}</span>` : c.vence ? `<span class="tag">renueva ${fmtFecha(parse(c.vence))}</span>` : '');
   const tel = c.tel ? `<a class="tag" href="tel:${esc(String(c.tel).replace(/[^\d+]/g, ''))}">📞 ${esc(c.tel)}</a>` : '';
   const lnk = /^https?:\/\//i.test(c.link || '') ? `<a class="tag ok" href="${esc(c.link)}" target="_blank" rel="noopener">Términos y condiciones ↗</a>` : '';
   return `<div class="card ${e.vencido ? 'gris' : e.pronto ? 'amb' : ''}"><div class="fila"><div>
@@ -719,6 +720,7 @@ function formCup(c) {
     onSave: async d => {
       d.gastado = d.gastado || 0; d.veces = d.veces || 0;
       if (d.link && !/^https?:\/\//i.test(d.link)) d.link = 'https://' + d.link;
+      if (!nuevo) d.porDefinir = false;
       if (nuevo) await addDoc(ref('cup'), { ...d, usado: false, porActivar: !!d.meta }); else await updateDoc(ref('cup', c.id), d);
       cerrar();
     },
@@ -726,16 +728,35 @@ function formCup(c) {
   });
 }
 
-function formRapida() {
+function formRapida() {   // paso 1: ¿recordatorio o beneficio?
+  $('#hoja').innerHTML = `<h3>Nota rápida</h3><p class="mute"><small>¿Qué vas a anotar?</small></p>
+    <div class="botones" style="flex-direction:column;gap:10px">
+      <button id="nr-rec" style="padding:16px">🔔 Recordatorio<br><small>algo pendiente por hacer o cobrar</small></button>
+      <button id="nr-ben" class="sec" style="padding:16px">🎁 Beneficio<br><small>algo que recordé o que obtuve (seguro, promo, descuento…)</small></button>
+    </div><div class="botones"><button class="sec" id="f-cancel">Cerrar</button></div>`;
+  $('#modal').hidden = false;
+  $('#f-cancel').onclick = cerrar;
+  $('#nr-rec').onclick = () => notaRapida('rec');
+  $('#nr-ben').onclick = () => notaRapida('ben');
+}
+function notaRapida(clase) {   // paso 2: dictar o escribir
+  const ben = clase === 'ben';
   formulario({
-    titulo: 'Nota rápida',
+    titulo: ben ? '🎁 Beneficio rápido' : '🔔 Recordatorio rápido',
     valores: {},
-    extraHtml: '<p class="mute"><small>Dicta o escribe lo que sea (usa el micrófono del teclado). Los datos los completas después.</small></p>',
-    campos: [{ k: 'concepto', label: 'Qué quedó pendiente', type: 'textarea', ph: 'Vender la tableta, reembolso de la licuadora…' }],
+    extraHtml: `<p class="mute"><small>Dicta o escribe lo que sea (usa el micrófono del teclado). ${ben ? 'Queda en Beneficios como "por completar".' : 'Los datos los completas después.'}</small></p>`,
+    campos: [{ k: 'concepto', label: ben ? 'Qué beneficio es' : 'Qué quedó pendiente', type: 'textarea', ph: ben ? 'Seguro de viajero con la Amex, 2x1 en Cinépolis los martes…' : 'Vender la tableta, reembolso de la licuadora…' }],
     onSave: async d => {
-      if (!String(d.concepto || '').trim()) return toast('Escribe algo');
-      await addDoc(ref('cobrar'), { concepto: String(d.concepto).trim(), estatus: 'pendiente', porDefinir: true, desde: ymd(today()), archivos: [] });
-      cerrar(); toast('Guardada: queda como "por definir"');
+      const t = String(d.concepto || '').trim();
+      if (!t) return toast('Escribe algo');
+      if (ben) {
+        const corto = t.length > 60 ? t.slice(0, 57).trimEnd() + '…' : t;
+        await addDoc(ref('cup'), { tipo: 'otro', nombre: corto, resumen: t, porDefinir: true, usado: false, porActivar: false });
+        cerrar(); toast('Guardado en Beneficios: complétalo cuando puedas');
+      } else {
+        await addDoc(ref('cobrar'), { concepto: t, estatus: 'pendiente', porDefinir: true, desde: ymd(today()), archivos: [] });
+        cerrar(); toast('Guardada: queda como "por definir"');
+      }
     },
   });
   setTimeout(() => { const el = $('#f_concepto'); if (el) el.focus(); }, 100);

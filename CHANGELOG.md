@@ -1,3 +1,6 @@
+## v21 (12 nov 2026)
+- Nota rapida (🎤): primero se elige Recordatorio (como antes, va a Por cobrar "por definir") o Beneficio (va a Beneficios como "por completar"; al editarlo se quita la marca).
+
 ## v20 (12 nov 2026)
 - Pagos: seccion "Cancelar a tiempo" (coleccion finanzas_cancelar: nombre, limite, monto, donde, nota, estado activa|cancelada|recurrente). Aviso en Hoy (7 dias), calendario con ✂️ y correo a 7/5/3/2/1/0 dias (noche solo 1 y 0), y diario si ya paso. Botones: Ya cancele / Me cobraron (pasa a recurrentes).
 
