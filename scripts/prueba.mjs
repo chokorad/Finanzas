@@ -47,6 +47,14 @@ ok('rendimientos: no avisa antes del día 20, sí después; pm no los incluye', 
   rend[0].progreso = 4;
   assert.equal(armarAviso({ rend }, { hoy: D(2026, 11, 23), dow: 3, slot: 'am' }), null);
 });
+ok('beneficios: seguro avisa a 30/14/7/3/1/0 días antes de renovar y no entre medias', () => {
+  const seg = [{ nombre: 'Seguro auto', tipo: 'seguro', vence: '2026-12-10', link: 'https://x.mx/tyc' }];
+  const r = armarAviso({ cup: seg }, { hoy: D(2026, 11, 10), dow: 2, slot: 'am' });   // faltan 30
+  assert.match(r.html, /Seguro auto/); assert.match(r.html, /Seguros y beneficios por renovar/);
+  assert.equal(armarAviso({ cup: seg }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' }), null);   // faltan 28: nada
+  assert.ok(armarAviso({ cup: seg }, { hoy: D(2026, 12, 3), dow: 4, slot: 'am' }));   // faltan 7
+  assert.equal(armarAviso({ cup: seg }, { hoy: D(2026, 12, 3), dow: 4, slot: 'pm' }), null);   // la noche solo a 1 día o menos
+});
 ok('cupones: avisa a 7 días y no si está usado', () => {
   const cup = [{ nombre: 'Vuelo', codigo: 'XYZ', vence: '2026-11-16' }, { nombre: 'Usado', vence: '2026-11-16', usado: true }];
   const r = armarAviso({ cup }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });

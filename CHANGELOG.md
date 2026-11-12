@@ -1,3 +1,6 @@
+## v19 (11 nov 2026)
+- Cupones pasa a **Beneficios**: seguros, pases/membresias (TAG), beneficios de tarjeta y cupones (campo `tipo` en finanzas_cupones; vacio = cupon). Cada beneficio: resumen de que ofrece, link a terminos, telefono, renovacion. Aviso por correo a 30/14/7/3/1/0 dias de la renovacion.
+
 ## v18 (11 nov 2026)
 - Pagos: secciones plegables (Tarjetas y pagos, Pagos recurrentes, Estados de cuenta).
 - Pagos recurrentes (coleccion finanzas_recurrentes): seguros, suscripciones, gasto hormiga. Total al mes/año, "por confirmar", editar. Boton para cargar los detectados en julio.

@@ -52,14 +52,15 @@ function estadoRend(r, hoy) {
   const avisar = !hecho && hoy.getDate() >= (r.diaAviso ?? 20);
   return { progreso, cumplido, hecho, avisar, tipo, mesAct };
 }
+const esBeneficio = c => !!c.tipo && c.tipo !== 'cupon';   // seguros, pases y beneficios de tarjeta (su 'vence' = renovación)
 function estadoCup(c, hoy) {
   if (c.usado || !c.vence) return { dd: null, pronto: false, vencido: false };
   const dd = diffDays(parse(c.vence), hoy);
-  return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7), vencido: dd < 0 };
+  return { dd, pronto: dd >= 0 && dd <= (c.meta || esBeneficio(c) ? 30 : 7), vencido: dd < 0 };
 }
 
 // ---------- estado ----------
-const VERSION = 'v18 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v19 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
 const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [], recur: [] };
 const cargado = { pagos: false, rend: false };
@@ -125,7 +126,8 @@ function listaHoy(hoy) {
   for (const r of S.rend) { const e = estadoRend(r, hoy); if (e.avisar) out.push({ nivel: 1, orden: 50, tipo: 'rend', r, e }); }
   for (const c of S.cup) {
     const e = estadoCup(c, hoy);
-    if (c.meta) { if (!c.usado && !e.vencido && (c.porActivar || e.pronto)) out.push({ nivel: 1, orden: 55, tipo: 'promo', c, e }); }
+    if (esBeneficio(c)) { if (e.pronto) out.push({ nivel: e.dd <= 3 ? 0 : 1, orden: 40 + e.dd, tipo: 'cup', c, e }); }
+    else if (c.meta) { if (!c.usado && !e.vencido && (c.porActivar || e.pronto)) out.push({ nivel: 1, orden: 55, tipo: 'promo', c, e }); }
     else if (e.pronto) out.push({ nivel: e.dd <= 1 ? 0 : 1, orden: e.dd, tipo: 'cup', c, e });
   }
   for (const e of estadosPendientes(S.pagos, hoy)) out.push({ nivel: 1, orden: 70, tipo: 'estado', e });
@@ -156,9 +158,9 @@ function vistaHoyLista(lista, hoy) {
       <span class="tag amb">${u.c.porActivar ? 'actívala antes de gastar' : (u.e.dd == null ? 'en curso' : 'vence en ' + u.e.dd + ' d')}</span>
       <small>Llevas ${MXN(u.c.gastado || 0)} · faltan ${MXN(Math.max(0, u.c.meta - (u.c.gastado || 0)))}</small></div>
       <div class="acciones">${u.c.porActivar ? `<button data-act="cup-activado" data-id="${u.c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${u.c.id}">＋ Gasto</button>`}</div></div></div>`;
-    if (u.tipo === 'cup') return `<div class="card ${claseNivel(u.nivel)}"><div class="fila"><div><div class="t">🎟 ${esc(u.c.nombre)}</div>
-      <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.e.dd === 0 ? 'vence HOY' : 'vence en ' + u.e.dd + ' d'}</span> <small>${esc(u.c.codigo || '')}</small></div>
-      <div class="acciones"><button data-act="cup-usado" data-id="${u.c.id}">Usado</button></div></div></div>`;
+    if (u.tipo === 'cup') return `<div class="card ${claseNivel(u.nivel)}"><div class="fila"><div><div class="t">${esBeneficio(u.c) ? icoBen(u.c) : '🎟'} ${esc(u.c.nombre)}</div>
+      <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.e.dd === 0 ? (esBeneficio(u.c) ? 'renueva HOY' : 'vence HOY') : (esBeneficio(u.c) ? 'renueva en ' : 'vence en ') + u.e.dd + ' d'}</span> <small>${esc(u.c.codigo || '')}</small></div>
+      <div class="acciones">${esBeneficio(u.c) ? `<button data-act="cup-editar" data-id="${u.c.id}">Ya renové / editar</button>` : `<button data-act="cup-usado" data-id="${u.c.id}">Usado</button>`}</div></div></div>`;
     return `<div class="card amb"><div class="fila"><div><div class="t">💵 ${esc(u.x.concepto)}</div>
       <small>${esc(u.x.deQuien || '')} ${u.x.monto ? '· ' + MXN(u.x.monto) : ''}</small><br><span class="tag amb">${u.x.porDefinir ? 'por definir' : u.dias + ' días abierto'}</span></div>
       <div class="acciones"><button class="sec" data-act="cob-editar" data-id="${u.x.id}">Abrir</button><button data-act="cob-cobrado" data-id="${u.x.id}">Cobrado</button></div></div></div>`;
@@ -286,7 +288,7 @@ function vistaPagos(hoy) {
 
 // ---------- pestaña Dinero (capital total, jarras, cuentas) ----------
 const esLargo = j => /largo plazo/i.test(j.nombre);
-const dineroAbierto = { cuentas: false, jarras: false, pagos: true, recur: false, estados: false }; // secciones plegables (Dinero y Pagos)
+const dineroAbierto = { cuentas: false, jarras: false, pagos: true, recur: false, estados: false, cupones: true }; // secciones plegables (Dinero y Pagos)
 function vistaRend(hoy) {
   if (cargado.jarras && !S.jarras.length && cargado.rend) {
     return `<div class="vacio">Aún no hay jarras.<br><br><button id="btn-dinero">Cargar mis cifras (10 nov 2026)</button><br><small>Cuentas, jarras, metas, tarjeta Mercado Pago y días de corte. Provisional: luego lo ajustas.</small></div>` + cuentasHtml(hoy);
@@ -400,8 +402,22 @@ async function sembrarDinero() {
 }
 
 const nomCup = c => String(c.nombre).startsWith('Amex Platinum: $500') ? 'Amex–Walmart' : c.nombre;
+const TIPOS_BEN = [['cupon', '🎟 Cupón o promo'], ['seguro', '🛡 Seguro'], ['pase', '🎫 Pase o membresía (TAG, club…)'], ['tarjeta', '💳 Beneficio de tarjeta'], ['otro', '🎁 Otro beneficio']];
+const icoBen = c => ({ seguro: '🛡', pase: '🎫', tarjeta: '💳', otro: '🎁' }[c.tipo] || '🎟');
+function cardBeneficio(c, hoy) {
+  const e = estadoCup(c, hoy);
+  const tag = e.vencido ? '<span class="tag rojo">venció</span>' : e.pronto ? `<span class="tag amb">${e.dd === 0 ? 'renueva HOY' : 'renueva en ' + e.dd + ' d'}</span>` : c.vence ? `<span class="tag">renueva ${fmtFecha(parse(c.vence))}</span>` : '';
+  const tel = c.tel ? `<a class="tag" href="tel:${esc(String(c.tel).replace(/[^\d+]/g, ''))}">📞 ${esc(c.tel)}</a>` : '';
+  const lnk = /^https?:\/\//i.test(c.link || '') ? `<a class="tag ok" href="${esc(c.link)}" target="_blank" rel="noopener">Términos y condiciones ↗</a>` : '';
+  return `<div class="card ${e.vencido ? 'gris' : e.pronto ? 'amb' : ''}"><div class="fila"><div>
+    <div class="t">${icoBen(c)} ${esc(c.nombre)}</div>${tag}${c.donde ? `<small>${esc(c.donde)}</small>` : ''}
+    ${c.resumen ? `<details class="det" open><summary>Qué me ofrece</summary><div class="nota">${esc(c.resumen)}</div></details>` : '<div class="nota">Falta el resumen: toca ✎ y anota qué cubre u ofrece.</div>'}
+    <div style="margin-top:6px">${lnk} ${tel}</div></div>
+    <div class="acciones"><button class="sec chico" data-act="cup-editar" data-id="${c.id}">✎</button></div></div></div>`;
+}
 function vistaCup(hoy) {
-  const items = S.cup.slice().sort((a, b) => (!!a.usado - !!b.usado) || String(a.vence || '9999').localeCompare(String(b.vence || '9999')));
+  const ben = S.cup.filter(esBeneficio), cups = S.cup.filter(c => !esBeneficio(c));
+  const items = cups.slice().sort((a, b) => (!!a.usado - !!b.usado) || String(a.vence || '9999').localeCompare(String(b.vence || '9999')));
   const filas = items.map(c => {
     const e = estadoCup(c, hoy);
     const tag = c.usado ? '<span class="tag">usado</span>' : e.vencido ? '<span class="tag rojo">vencido</span>'
@@ -418,7 +434,27 @@ function vistaCup(hoy) {
       <div class="acciones">${c.usado ? '' : c.meta ? (c.porActivar ? `<button data-act="cup-activado" data-id="${c.id}">Ya la activé</button>` : `<button data-act="cup-gasto" data-id="${c.id}">＋ Gasto</button>`) : ''}${c.usado ? '' : `<button class="${c.meta ? 'sec chico' : ''}" data-act="cup-usado" data-id="${c.id}">${c.meta ? 'Terminada' : 'Usado'}</button>`}<button class="sec chico" data-act="cup-editar" data-id="${c.id}">✎</button></div></div></div>`;
   }).join('');
   const sinAmex = !S.cup.some(c => String(c.nombre).startsWith('Amex Platinum: $500'));
-  return `<div class="barra"><button class="sec" data-act="cup-nuevo">＋ Nuevo cupón</button>${sinAmex ? '<button class="sec" data-act="cup-seed-amex">＋ Promo Amex–Walmart</button>' : ''}</div>` + (filas || '<div class="vacio">Sin cupones.</div>');
+  const grupo = (clave, titulo, lista, resumen) => `<details class="sec-tog" data-tog="${clave}" ${dineroAbierto[clave] ? 'open' : ''}><summary><h2>${titulo} <small class="mute">· ${resumen}</small></h2></summary>${lista}</details>`;
+  const secciones = [['seguro', '🛡 Seguros'], ['pase', '🎫 Pases y membresías'], ['tarjeta', '💳 Beneficios de tarjeta'], ['otro', '🎁 Otros beneficios']].map(([t, tit]) => {
+    const l = ben.filter(c => c.tipo === t).sort((a, b) => String(a.vence || '9999').localeCompare(String(b.vence || '9999')));
+    return l.length ? grupo('ben_' + t, tit, l.map(c => cardBeneficio(c, hoy)).join(''), l.length) : '';
+  }).join('');
+  const vacioBen = !ben.length ? `<div class="vacio">Aquí van tus seguros, pase de TAG, beneficios de tarjetas y viajero, con un resumen de qué te ofrecen.<br><br><button id="btn-benef">Cargar lo que ya sé de tus estados</button><br><small>Seguros Zurich, ANA y AXA y el beneficio Starbucks de Amex. Solo nombre y cargo; el resumen de cobertura lo agregas tú.</small></div>` : '';
+  return `<div class="barra"><button class="sec" data-act="cup-nuevo">＋ Nuevo</button>${sinAmex ? '<button class="sec" data-act="cup-seed-amex">＋ Promo Amex–Walmart</button>' : ''}</div>`
+    + secciones + vacioBen
+    + grupo('cupones', '🎟 Cupones y promos', filas || '<div class="vacio">Sin cupones.</div>', cups.filter(c => !c.usado).length + ' activos');
+}
+// Lo que se sabe de los estados de cuenta (julio 2026). Sin inventar coberturas.
+async function sembrarBeneficios() {
+  const b = writeBatch(db);
+  [
+    ['seguro', 'Seguro Zurich Santander', 'LikeU 0048', 'Falta anotar qué cubre. Se cobra a la LikeU (≈ $292 al mes en julio).'],
+    ['seguro', 'Seguro de auto (ANA)', 'Amex', 'Falta anotar cobertura, deducible y teléfono de siniestros. Se cobra a la Amex (≈ $816).'],
+    ['seguro', 'AXA Seguros (1)', 'Amex', 'Falta anotar qué cubre. Se cobra a la Amex (≈ $684).'],
+    ['seguro', 'AXA Seguros (2)', 'Amex', 'Falta anotar qué cubre y si se repite con el otro AXA. Se cobra a la Amex (≈ $433).'],
+    ['tarjeta', 'Amex Platinum: bebida gratis Starbucks', 'Amex', 'Una bebida gratis al gastar $140 o más en Starbucks con la Amex.'],
+  ].forEach(([tipo, nombre, donde, resumen]) => b.set(doc(ref('cup')), { tipo, nombre, donde, resumen, usado: false, porActivar: false }));
+  await b.commit(); toast('Cargados: completa el resumen de cada uno');
 }
 
 function vistaCobrar(hoy) {
@@ -493,7 +529,7 @@ function eventosMes(mk, hoy) {
   }
   for (const c of S.cup) {
     if (c.usado || !c.vence || c.vence.slice(0, 7) !== mk) continue;
-    add(parse(c.vence), '🎟', `Vence: ${nomCup(c)}`, nivelDd(diffDays(parse(c.vence), hoy)));
+    add(parse(c.vence), esBeneficio(c) ? '🛡' : '🎟', `${esBeneficio(c) ? 'Vence/renueva' : 'Vence'}: ${nomCup(c)}`, nivelDd(diffDays(parse(c.vence), hoy)));
   }
   for (const x of S.cobrar) {
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
@@ -527,7 +563,7 @@ function vistaCal(hoy) {
     <div><span class="t" style="text-transform:capitalize">${MESES_L[m - 1]} ${y}</span> ${mk !== ymKey(hoy) ? '<button class="sec chico" data-act="cal-hoy">Hoy</button>' : ''}</div>
     <button class="sec chico" data-act="cal-next">▶</button></div>
     <div class="cal-g">${celdas}</div>${detalle}
-    <div class="leyenda">💰 depósito de nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
+    <div class="leyenda">💰 depósito de nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 🛡 seguro/beneficio · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
 }
 
 // ---------- modal / formularios ----------
@@ -617,13 +653,17 @@ function formRend(r) {
 function formCup(c) {
   const nuevo = !c;
   formulario({
-    titulo: nuevo ? 'Nuevo cupón' : 'Editar cupón',
-    valores: c || {},
+    titulo: nuevo ? 'Nuevo beneficio o cupón' : 'Editar',
+    valores: c || { tipo: 'cupon' },
     campos: [
-      { k: 'nombre', label: 'Qué es', ph: 'Vuelo 20% Volaris, cupón Walmart…' },
-      { k: 'codigo', label: 'Código', ph: 'ABC123' },
-      { k: 'donde', label: 'Dónde se usa' },
-      { k: 'vence', label: 'Vence', type: 'date' },
+      { k: 'tipo', label: 'Tipo', type: 'select', opts: TIPOS_BEN },
+      { k: 'nombre', label: 'Qué es', ph: 'Seguro de viajero, pase TAG, cupón Walmart…' },
+      { k: 'resumen', label: 'Qué me ofrece (resumen; para seguros y beneficios)', type: 'textarea' },
+      { k: 'link', label: 'Link a términos y condiciones (https://…)' },
+      { k: 'tel', label: 'Teléfono (siniestros, asistencia)' },
+      { k: 'codigo', label: 'Código (cupones)', ph: 'ABC123' },
+      { k: 'donde', label: 'Dónde se usa / con quién' },
+      { k: 'vence', label: 'Vence o renueva', type: 'date' },
       { k: 'meta', label: 'Promo de gasto: meta por bonificación ($, opcional)', type: 'number' },
       { k: 'bonificacion', label: 'Monto de cada bonificación ($, opcional)', type: 'number' },
       { k: 'maxVeces', label: 'Máximo de bonificaciones (opcional)', type: 'number' },
@@ -633,6 +673,7 @@ function formCup(c) {
     ],
     onSave: async d => {
       d.gastado = d.gastado || 0; d.veces = d.veces || 0;
+      if (d.link && !/^https?:\/\//i.test(d.link)) d.link = 'https://' + d.link;
       if (nuevo) await addDoc(ref('cup'), { ...d, usado: false, porActivar: !!d.meta }); else await updateDoc(ref('cup', c.id), d);
       cerrar();
     },
@@ -808,6 +849,7 @@ async function sembrar() {
 // ---------- acciones ----------
 document.addEventListener('click', async e => {
   if (e.target.id === 'btn-seed') { e.target.disabled = true; await sembrar(); return; }
+  if (e.target.id === 'btn-benef') { e.target.disabled = true; await sembrarBeneficios(); return; }
   if (e.target.id === 'btn-recur') { e.target.disabled = true; await sembrarRecurrentes(); return; }
   if (e.target.id === 'btn-dinero') { e.target.disabled = true; await sembrarDinero(); return; }
   const el = e.target.closest('[data-act]'); if (!el) return;

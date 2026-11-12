@@ -49,10 +49,13 @@ export function estadoRend(r, hoy) {
   const hecho = tipo === 'ninguna' ? true : tipo === 'check' ? cumplido : progreso >= (r.meta || 1);
   return { progreso, hecho, tipo, avisar: !hecho && hoy.getDate() >= (r.diaAviso ?? 20) };
 }
+// Beneficios: cupones (tipo vacío o 'cupon') y además seguros, pases, beneficios de tarjeta (su 'vence' es la renovación).
+export const esBeneficio = c => !!c.tipo && c.tipo !== 'cupon';
+export const AVISOS_BENEFICIO = [30, 14, 7, 3, 1, 0];   // días antes de que venza/renueve en que se manda correo
 export function estadoCup(c, hoy) {
   if (c.usado || !c.vence) return { dd: null, pronto: false };
   const dd = diffDays(parse(c.vence), hoy);
-  return { dd, pronto: dd >= 0 && dd <= (c.meta ? 30 : 7) };
+  return { dd, pronto: dd >= 0 && dd <= (c.meta || esBeneficio(c) ? 30 : 7) };
 }
 
 // ---------- estados de cuenta (espejo de app.js): revisar 2 días después del corte; fin de semana -> viernes ----------
@@ -97,7 +100,7 @@ export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = 
     add(dueOf(mk, Number(r.diaInicio) || 1), '🌱', hecho ? 'ok' : 'amb');
     if (!hecho && mk >= ymKey(hoy)) add(ultimo, '⏳', ultimo < hoy ? 'rojo' : nivelDd(diffDays(ultimo, hoy)));
   }
-  for (const c of cup) if (!c.usado && c.vence && c.vence.slice(0, 7) === mk) add(parse(c.vence), '🎟', nivelDd(diffDays(parse(c.vence), hoy)));
+  for (const c of cup) if (!c.usado && c.vence && c.vence.slice(0, 7) === mk) add(parse(c.vence), esBeneficio(c) ? '🛡' : '🎟', nivelDd(diffDays(parse(c.vence), hoy)));
   for (const x of cobrar) {
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
     add(parse(x.fechaEsperada), '💵', diffDays(parse(x.fechaEsperada), hoy) < 0 ? 'rojo' : 'amb');
@@ -162,6 +165,11 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
   }
   for (const c of cup) {
     const e = estadoCup(c, hoy);
+    if (esBeneficio(c)) {   // seguros, pases, beneficios: aviso solo a 30/14/7/3/1/0 días de la renovación
+      if (e.dd !== null && AVISOS_BENEFICIO.includes(e.dd) && (slot === 'am' || e.dd <= 1))
+        items.push({ n: e.dd <= 3 ? 0 : 1, orden: 40 + e.dd, sec: 'Seguros y beneficios por renovar', t: `${esc(c.nombre)}${c.donde ? ' (' + esc(c.donde) + ')' : ''} — ${e.dd === 0 ? 'vence/renueva HOY' : 'vence/renueva en ' + e.dd + ' día(s)'}${c.link ? ' · <a href="' + esc(c.link) + '">términos</a>' : ''}` });
+      continue;
+    }
     if (c.meta) {   // promos con meta de gasto: solo en la mañana
       if (slot !== 'am' || c.usado || e.dd < 0) continue;
       const avance = `llevas ${MXN(c.gastado || 0)} de ${MXN(c.meta)} · bonificaciones ${c.veces || 0}/${c.maxVeces || '∞'}`;
@@ -216,7 +224,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       for (const p of pagos.filter(p => p.activo !== false && p.corte)) {
         for (const k of [-1, 0]) { const mk = addMonths(ymKey(f), k); if (mk >= ESTADOS_DESDE && !(p.estados || []).includes(mk) && ymd(revisionDe(p, mk)) === fk) ag.push({ d, t: `${et} · 📄 ${esc(p.nombre)}: revisar estado de cuenta` }); }
       }
-      for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · 🎟 vence ${esc(c.nombre)}` });
+      for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · ${esBeneficio(c) ? '🛡 vence/renueva' : '🎟 vence'} ${esc(c.nombre)}` });
       for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });
     }
     for (let d = 1; d <= 7; d++) {
