@@ -6,7 +6,7 @@ import nodemailer from 'nodemailer';
 import { ahoraLocal, slotDe, armarAviso, ymd } from './logica.mjs';
 
 const { FIREBASE_SERVICE_ACCOUNT, GMAIL_USER, GMAIL_APP_PASSWORD } = process.env;
-const MODO = (process.env.MODO || '').trim();
+const MODO = (process.env.MODO || '').trim() === 'auto' ? '' : (process.env.MODO || '').trim();   // 'auto' = igual que el horario programado
 for (const [k, v] of Object.entries({ FIREBASE_SERVICE_ACCOUNT, GMAIL_USER, GMAIL_APP_PASSWORD })) {
   if (!v) { console.error(`Falta el secret ${k}`); process.exit(1); }
 }

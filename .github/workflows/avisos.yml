@@ -8,10 +8,10 @@ on:
   workflow_dispatch:
     inputs:
       modo:
-        description: 'prueba = manda un correo ahora; am / pm = fuerza ese turno'
+        description: 'prueba = manda un correo ahora; am / pm = fuerza ese turno; auto = como el horario (respeta ventana, fin de semana y no duplica)'
         type: choice
         default: prueba
-        options: [prueba, am, pm]
+        options: [prueba, am, pm, auto]
 
 permissions:
   actions: write   # para reactivarse solo (GitHub apaga los horarios tras 60 días sin actividad)
