@@ -30,7 +30,7 @@ const marca = base.collection('finanzas_envios').doc(`${ymd(hoy)}_${slot}`);
 if (!prueba && !MODO && (await marca.get()).exists) { console.log('Ya se envió este turno.'); process.exit(0); }
 
 const leer = async n => (await base.collection(n).get()).docs.map(d => ({ id: d.id, ...d.data() }));
-const datos = { pagos: await leer('finanzas_pagos'), rend: await leer('finanzas_rend'), cup: await leer('finanzas_cupones'), cobrar: await leer('finanzas_cobrar') };
+const datos = { pagos: await leer('finanzas_pagos'), rend: await leer('finanzas_rend'), cup: await leer('finanzas_cupones'), cobrar: await leer('finanzas_cobrar'), cancelar: await leer('finanzas_cancelar') };
 
 let aviso = armarAviso(datos, { hoy, dow: prueba ? 5 : dow, slot });
 if (prueba && !aviso) aviso = { asunto: '☀️ Finanzas: prueba de avisos ✅', html: '<p>Los avisos funcionan. Hoy no hay pendientes urgentes.</p>', total: 0 };

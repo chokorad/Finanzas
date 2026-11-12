@@ -1,3 +1,6 @@
+## v20 (12 nov 2026)
+- Pagos: seccion "Cancelar a tiempo" (coleccion finanzas_cancelar: nombre, limite, monto, donde, nota, estado activa|cancelada|recurrente). Aviso en Hoy (7 dias), calendario con ✂️ y correo a 7/5/3/2/1/0 dias (noche solo 1 y 0), y diario si ya paso. Botones: Ya cancele / Me cobraron (pasa a recurrentes).
+
 ## v19 (11 nov 2026)
 - Cupones pasa a **Beneficios**: seguros, pases/membresias (TAG), beneficios de tarjeta y cupones (campo `tipo` en finanzas_cupones; vacio = cupon). Cada beneficio: resumen de que ofrece, link a terminos, telefono, renovacion. Aviso por correo a 30/14/7/3/1/0 dias de la renovacion.
 

@@ -52,6 +52,7 @@ function estadoRend(r, hoy) {
   const avisar = !hecho && hoy.getDate() >= (r.diaAviso ?? 20);
   return { progreso, cumplido, hecho, avisar, tipo, mesAct };
 }
+const pendienteCancelar = x => x.estado !== 'cancelada' && x.estado !== 'recurrente' && !!x.limite;   // suscripciones de prueba por cancelar
 const esBeneficio = c => !!c.tipo && c.tipo !== 'cupon';   // seguros, pases y beneficios de tarjeta (su 'vence' = renovación)
 function estadoCup(c, hoy) {
   if (c.usado || !c.vence) return { dd: null, pronto: false, vencido: false };
@@ -60,12 +61,12 @@ function estadoCup(c, hoy) {
 }
 
 // ---------- estado ----------
-const VERSION = 'v19 · 11 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
+const VERSION = 'v20 · 12 nov 2026'; // súbela junto con CACHE en sw.js en cada cambio
 const elVer = document.getElementById('ver'); if (elVer) elVer.textContent = 'Finanzas ' + VERSION;
-const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [], recur: [] };
+const S = { pagos: [], rend: [], cup: [], cobrar: [], jarras: [], metas: [], recur: [], cancelar: [] };
 const cargado = { pagos: false, rend: false };
 let uid = null, unsubs = [];
-const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar', jarras: 'finanzas_jarras', metas: 'finanzas_metas', recur: 'finanzas_recurrentes' };
+const COL = { pagos: 'finanzas_pagos', rend: 'finanzas_rend', cup: 'finanzas_cupones', cobrar: 'finanzas_cobrar', jarras: 'finanzas_jarras', metas: 'finanzas_metas', recur: 'finanzas_recurrentes', cancelar: 'finanzas_cancelar' };
 const ref = (k, id) => id ? doc(db, 'users', uid, COL[k], id) : collection(db, 'users', uid, COL[k]);
 
 function escuchar() {
@@ -130,6 +131,7 @@ function listaHoy(hoy) {
     else if (c.meta) { if (!c.usado && !e.vencido && (c.porActivar || e.pronto)) out.push({ nivel: 1, orden: 55, tipo: 'promo', c, e }); }
     else if (e.pronto) out.push({ nivel: e.dd <= 1 ? 0 : 1, orden: e.dd, tipo: 'cup', c, e });
   }
+  for (const x of S.cancelar.filter(pendienteCancelar)) { const dd = diffDays(parse(x.limite), hoy); if (dd <= 7) out.push({ nivel: dd <= 2 ? 0 : 1, orden: dd < 0 ? 1 : 2 + dd, tipo: 'cancelar', x, dd }); }
   for (const e of estadosPendientes(S.pagos, hoy)) out.push({ nivel: 1, orden: 70, tipo: 'estado', e });
   for (const x of S.cobrar.filter(x => x.estatus !== 'cobrado')) {
     const dias = diffDays(hoy, parse(x.desde || ymd(hoy)));
@@ -154,6 +156,9 @@ function vistaHoyLista(lista, hoy) {
     if (u.tipo === 'estado') return `<div class="card amb"><div class="fila"><div><div class="t">📄 ${esc(u.e.p.nombre)}</div>
       <span class="tag amb">estado de cuenta pendiente</span> <small>corte ${fmtFecha(u.e.corte)} · desde ${fmtFecha(u.e.rev)} (${u.e.dias} d)</small></div>
       <div class="acciones"><button data-act="estado-ok" data-id="${u.e.p.id}" data-mk="${u.e.mk}">Revisado</button></div></div></div>`;
+    if (u.tipo === 'cancelar') return `<div class="card ${u.dd < 0 ? 'rojo' : claseNivel(u.nivel)}"><div class="fila"><div><div class="t">✂️ Cancelar ${esc(u.x.nombre)}</div>
+      <span class="tag ${u.nivel === 0 ? 'rojo' : 'amb'}">${u.dd < 0 ? 'ya pasó la fecha' : u.dd === 0 ? 'ÚLTIMO DÍA HOY' : 'quedan ' + u.dd + ' d'}</span> <small>hasta el ${fmtFecha(parse(u.x.limite))}${u.x.monto ? ' · si no, te cobran ' + MXN(u.x.monto) : ''}</small>${u.x.donde ? `<div class="nota">Cancela en: ${esc(u.x.donde)}</div>` : ''}</div>
+      <div class="acciones"><button data-act="canc-ok" data-id="${u.x.id}">Ya cancelé</button>${u.dd < 0 ? `<button class="sec chico" data-act="canc-recurrente" data-id="${u.x.id}">Me cobraron</button>` : ''}</div></div></div>`;
     if (u.tipo === 'promo') return `<div class="card amb"><div class="fila"><div><div class="t">🎟 ${esc(nomCup(u.c))}</div>
       <span class="tag amb">${u.c.porActivar ? 'actívala antes de gastar' : (u.e.dd == null ? 'en curso' : 'vence en ' + u.e.dd + ' d')}</span>
       <small>Llevas ${MXN(u.c.gastado || 0)} · faltan ${MXN(Math.max(0, u.c.meta - (u.c.gastado || 0)))}</small></div>
@@ -207,6 +212,44 @@ function cuentasHtml(hoy) {
     + `<p class="mute"><small>El avance de las condiciones se reinicia solo cada mes y te avisan por correo desde el día indicado en cada cuenta.</small></p>`;
 }
 
+function cancelarHtml(hoy) {
+  const pend = S.cancelar.filter(pendienteCancelar).sort((a, b) => a.limite.localeCompare(b.limite));
+  const hechas = S.cancelar.filter(x => !pendienteCancelar(x));
+  const card = x => {
+    const dd = diffDays(parse(x.limite), hoy), nivel = dd < 0 ? 0 : dd <= 2 ? 0 : dd <= 7 ? 1 : 2;
+    return `<div class="card ${dd < 0 ? 'rojo' : claseNivel(nivel)}"><div class="fila"><div>
+      <div class="t">✂️ ${esc(x.nombre)}</div>
+      <span class="tag ${nivel === 0 ? 'rojo' : nivel === 1 ? 'amb' : 'ok'}">${dd < 0 ? 'ya pasó la fecha' : dd === 0 ? 'ÚLTIMO DÍA HOY' : 'quedan ' + dd + ' d'}</span>
+      <small>cancela antes del ${fmtFecha(parse(x.limite))}${x.monto ? ' · si no, te cobran ' + MXN(x.monto) : ''}</small>
+      ${x.donde ? `<div class="nota">Cancela en: ${esc(x.donde)}</div>` : ''}${x.nota ? `<div class="nota">${esc(x.nota)}</div>` : ''}</div>
+      <div class="acciones"><button data-act="canc-ok" data-id="${x.id}">Ya cancelé</button>${dd < 0 ? `<button class="sec chico" data-act="canc-recurrente" data-id="${x.id}">Me cobraron</button>` : ''}<button class="sec chico" data-act="canc-editar" data-id="${x.id}">✎</button></div></div></div>`;
+  };
+  const hist = hechas.length ? `<details class="det"><summary>Ya resueltas (${hechas.length})</summary>${hechas.map(x => `<div class="card gris"><div class="fila"><div><div class="t">✂️ ${esc(x.nombre)}</div><small>${x.estado === 'cancelada' ? '✅ cancelada a tiempo' : 'pasó a pagos recurrentes'}</small></div><div class="acciones"><button class="sec chico" data-act="canc-reabrir" data-id="${x.id}">↩</button></div></div></div>`).join('')}</details>` : '';
+  const resumen = pend.length ? pend.length + ' por cancelar · la más cercana ' + fmtFecha(parse(pend[0].limite)) : 'nada pendiente ✔';
+  return `<details class="sec-tog" data-tog="cancelar" ${dineroAbierto.cancelar ? 'open' : ''}><summary><h2>Cancelar a tiempo <small class="mute">· ${resumen}</small></h2></summary>
+    <div class="barra"><button class="sec" data-act="canc-nuevo">＋ Suscripción de prueba</button></div>
+    ${pend.map(card).join('') || '<div class="vacio">Membresías que debes cancelar antes de que te cobren (pruebas gratis, "cancela antes del 5"…).</div>'}${hist}</details>`;
+}
+function formCancelar(x) {
+  const nuevo = !x;
+  formulario({
+    titulo: nuevo ? 'Cancelar a tiempo' : 'Editar',
+    valores: x || {},
+    campos: [
+      { k: 'nombre', label: 'Qué membresía o suscripción es', ph: 'Fabletics VIP, prueba de…' },
+      { k: 'limite', label: 'Cancela ANTES de (último día)', type: 'date' },
+      { k: 'monto', label: 'Cuánto te cobran si no cancelas ($ o USD, aclara en la nota)', type: 'number' },
+      { k: 'donde', label: 'Dónde se cancela', ph: 'App/web de… (puedes pegar el link)' },
+      { k: 'nota', label: 'Nota', type: 'textarea' },
+    ],
+    onSave: async d => {
+      if (!d.nombre || !d.limite) return toast('Pon el nombre y la fecha límite');
+      if (nuevo) await addDoc(ref('cancelar'), { ...d, estado: 'activa' }); else await updateDoc(ref('cancelar', x.id), d);
+      cerrar();
+    },
+    onDelete: nuevo ? null : () => deleteDoc(ref('cancelar', x.id)),
+  });
+}
 const FREC = [['mensual', 'Cada mes'], ['bimestral', 'Cada 2 meses'], ['semestral', 'Cada 6 meses'], ['anual', 'Cada año']];
 const CAT_REC = [['seguro', '🛡 Seguro'], ['suscripcion', '📺 Suscripción'], ['hormiga', '🐜 Gasto hormiga'], ['otro', '📌 Otro']];
 const mensualEq = r => { const m = Number(r.monto) || 0; return r.frecuencia === 'anual' ? m / 12 : r.frecuencia === 'semestral' ? m / 6 : r.frecuencia === 'bimestral' ? m / 2 : m; };
@@ -282,13 +325,14 @@ function vistaPagos(hoy) {
     est = `<details class="sec-tog" data-tog="estados" ${dineroAbierto.estados ? 'open' : ''}><summary><h2>Estados de cuenta <small class="mute">· ${pend.length ? pend.length + ' pendiente' + (pend.length > 1 ? 's' : '') : 'al corriente ✔'}</small></h2></summary>${est}</details>`;
   }
   const activos = S.pagos.filter(p => p.activo !== false).length;
-  return `<details class="sec-tog" data-tog="pagos" ${dineroAbierto.pagos ? 'open' : ''}><summary><h2>Tarjetas y pagos <small class="mute">· ${activos}</small></h2></summary>${vistaPagosBase(hoy)}</details>`
+  return cancelarHtml(hoy)
+    + `<details class="sec-tog" data-tog="pagos" ${dineroAbierto.pagos ? 'open' : ''}><summary><h2>Tarjetas y pagos <small class="mute">· ${activos}</small></h2></summary>${vistaPagosBase(hoy)}</details>`
     + recurrentesHtml() + est;
 }
 
 // ---------- pestaña Dinero (capital total, jarras, cuentas) ----------
 const esLargo = j => /largo plazo/i.test(j.nombre);
-const dineroAbierto = { cuentas: false, jarras: false, pagos: true, recur: false, estados: false, cupones: true }; // secciones plegables (Dinero y Pagos)
+const dineroAbierto = { cuentas: false, jarras: false, pagos: true, recur: false, estados: false, cupones: true, cancelar: true }; // secciones plegables (Dinero y Pagos)
 function vistaRend(hoy) {
   if (cargado.jarras && !S.jarras.length && cargado.rend) {
     return `<div class="vacio">Aún no hay jarras.<br><br><button id="btn-dinero">Cargar mis cifras (10 nov 2026)</button><br><small>Cuentas, jarras, metas, tarjeta Mercado Pago y días de corte. Provisional: luego lo ajustas.</small></div>` + cuentasHtml(hoy);
@@ -531,6 +575,7 @@ function eventosMes(mk, hoy) {
     if (c.usado || !c.vence || c.vence.slice(0, 7) !== mk) continue;
     add(parse(c.vence), esBeneficio(c) ? '🛡' : '🎟', `${esBeneficio(c) ? 'Vence/renueva' : 'Vence'}: ${nomCup(c)}`, nivelDd(diffDays(parse(c.vence), hoy)));
   }
+  for (const x of S.cancelar.filter(pendienteCancelar)) if (x.limite.slice(0, 7) === mk) add(parse(x.limite), '✂️', `Último día para cancelar: ${x.nombre}${x.monto ? ' (si no, ' + MXN(x.monto) + ')' : ''}`, diffDays(parse(x.limite), hoy) <= 3 ? 'rojo' : 'amb');
   for (const x of S.cobrar) {
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
     const dd = diffDays(parse(x.fechaEsperada), hoy);
@@ -563,7 +608,7 @@ function vistaCal(hoy) {
     <div><span class="t" style="text-transform:capitalize">${MESES_L[m - 1]} ${y}</span> ${mk !== ymKey(hoy) ? '<button class="sec chico" data-act="cal-hoy">Hoy</button>' : ''}</div>
     <button class="sec chico" data-act="cal-next">▶</button></div>
     <div class="cal-g">${celdas}</div>${detalle}
-    <div class="leyenda">💰 depósito de nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 🛡 seguro/beneficio · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
+    <div class="leyenda">💰 depósito de nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre del mes · 🎟 cupón · 🛡 seguro/beneficio · ✂️ cancelar a tiempo · 💵 cobro esperado<br>Rojo: vence en 3 días o menos · Ámbar: próximos 10 días · Verde: listo / te depositan</div></div>`;
 }
 
 // ---------- modal / formularios ----------
@@ -883,6 +928,18 @@ document.addEventListener('click', async e => {
     if (act === 'jar-mas') return formMonto(byId('jarras', id), 1);
     if (act === 'jar-menos') return formMonto(byId('jarras', id), -1);
     if (act === 'jar-editar') return formJarra(byId('jarras', id));
+    if (act === 'canc-nuevo') return formCancelar(null);
+    if (act === 'canc-editar') return formCancelar(byId('cancelar', id));
+    if (act === 'canc-ok') {
+      const x = byId('cancelar', id); if (!confirm(`¿Ya cancelaste ${x ? x.nombre : 'la membresía'}? Revisa que te llegó el correo de confirmación.`)) return;
+      await updateDoc(ref('cancelar', id), { estado: 'cancelada' }); return toast('Cancelada ✔');
+    }
+    if (act === 'canc-reabrir') { await updateDoc(ref('cancelar', id), { estado: 'activa' }); return toast('Vuelve a estar pendiente'); }
+    if (act === 'canc-recurrente') {
+      const x = byId('cancelar', id); if (!x || !confirm(`¿Te cobraron ${x.nombre}? Pasará a Pagos recurrentes para que la veas cada mes.`)) return;
+      await addDoc(ref('recur'), { nombre: x.nombre, monto: x.monto || 0, frecuencia: 'mensual', categoria: 'suscripcion', medio: '', nota: 'Venía de "Cancelar a tiempo". Revisa si la quieres cancelar.', confirmar: true, activo: true });
+      await updateDoc(ref('cancelar', id), { estado: 'recurrente' }); return toast('Pasó a Pagos recurrentes');
+    }
     if (act === 'rec-nuevo') return formRecurrente(null);
     if (act === 'rec-editar') return formRecurrente(byId('recur', id));
     if (act === 'rec-ok') { await updateDoc(ref('recur', id), { confirmar: false }); return toast('Confirmado'); }

@@ -55,6 +55,16 @@ ok('beneficios: seguro avisa a 30/14/7/3/1/0 días antes de renovar y no entre m
   assert.ok(armarAviso({ cup: seg }, { hoy: D(2026, 12, 3), dow: 4, slot: 'am' }));   // faltan 7
   assert.equal(armarAviso({ cup: seg }, { hoy: D(2026, 12, 3), dow: 4, slot: 'pm' }), null);   // la noche solo a 1 día o menos
 });
+ok('cancelar a tiempo: avisa a 7/5/3/2/1/0 días, urgente al final, y no si ya se canceló', () => {
+  const fab = [{ nombre: 'Fabletics', limite: '2026-12-05', monto: 69, donde: 'app Fabletics' }];
+  assert.equal(armarAviso({ cancelar: fab }, { hoy: D(2026, 11, 12), dow: 4, slot: 'am' }), null);            // faltan 23
+  const r7 = armarAviso({ cancelar: fab }, { hoy: D(2026, 11, 28), dow: 6 - 1, slot: 'am' });                   // faltan 7
+  assert.match(r7.html, /Cancela antes de que te cobren/); assert.match(r7.html, /Fabletics/);
+  assert.equal(armarAviso({ cancelar: fab }, { hoy: D(2026, 12, 2), dow: 3, slot: 'pm' }), null);               // faltan 3: la noche no
+  assert.ok(armarAviso({ cancelar: fab }, { hoy: D(2026, 12, 4), dow: 5, slot: 'pm' }));                        // falta 1: sí en la noche
+  assert.match(armarAviso({ cancelar: fab }, { hoy: D(2026, 12, 7), dow: 1, slot: 'am' }).html, /YA PASÓ/);      // ya pasó: sigue avisando
+  assert.equal(armarAviso({ cancelar: [{ ...fab[0], estado: 'cancelada' }] }, { hoy: D(2026, 12, 4), dow: 5, slot: 'am' }), null);
+});
 ok('cupones: avisa a 7 días y no si está usado', () => {
   const cup = [{ nombre: 'Vuelo', codigo: 'XYZ', vence: '2026-11-16' }, { nombre: 'Usado', vence: '2026-11-16', usado: true }];
   const r = armarAviso({ cup }, { hoy: D(2026, 11, 9), dow: 1, slot: 'am' });

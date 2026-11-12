@@ -83,7 +83,7 @@ const QUINCENAS = ['2026-11-10', '2026-11-25', '2026-12-10', '2026-12-17'];
 function ingresosMes(mk) {
   return QUINCENAS.filter(f => f.slice(0, 7) === mk).map(f => ({ date: parse(f), txt: 'Depósito de nómina ISSSTE' }));
 }
-export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = [] }) {
+export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = [], cancelar = [] }) {
   const ev = {};
   const add = (date, ico, n) => { const k = ymd(date); (ev[k] = ev[k] || []).push({ ico, n }); };
   const nivelDd = dd => dd <= 3 ? 'rojo' : dd <= 10 ? 'amb' : 'base';
@@ -101,6 +101,7 @@ export function eventosMes(mk, hoy, { pagos = [], rend = [], cup = [], cobrar = 
     if (!hecho && mk >= ymKey(hoy)) add(ultimo, '⏳', ultimo < hoy ? 'rojo' : nivelDd(diffDays(ultimo, hoy)));
   }
   for (const c of cup) if (!c.usado && c.vence && c.vence.slice(0, 7) === mk) add(parse(c.vence), esBeneficio(c) ? '🛡' : '🎟', nivelDd(diffDays(parse(c.vence), hoy)));
+  for (const x of cancelar) if (x.estado !== 'cancelada' && x.estado !== 'recurrente' && x.limite && x.limite.slice(0, 7) === mk) add(parse(x.limite), '✂️', diffDays(parse(x.limite), hoy) <= 3 ? 'rojo' : 'amb');
   for (const x of cobrar) {
     if (x.estatus === 'cobrado' || !x.fechaEsperada || x.fechaEsperada.slice(0, 7) !== mk) continue;
     add(parse(x.fechaEsperada), '💵', diffDays(parse(x.fechaEsperada), hoy) < 0 ? 'rojo' : 'amb');
@@ -133,12 +134,14 @@ export function calendarioHtml(datos, hoy, mk = ymKey(hoy)) {
   filas += '</tr>';
   return `<div style="margin-bottom:16px"><div style="font-weight:700;text-transform:capitalize;margin:0 0 6px">${MESES_L[m - 1]} ${y}</div>`
     + `<table style="width:100%;border-collapse:collapse;table-layout:fixed">${filas}</table>`
-    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💰 nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo / te depositan · Azul: hoy</div></div>`;
+    + `<div style="color:#64748b;font-size:11px;margin-top:6px">💰 nómina · 📄 estado de cuenta · 💳 pago tarjeta · 🎓 colegiatura · 🌱 empezar rendimientos · ⏳ cierre de mes · 🎟 cupón · ✂️ cancelar a tiempo · 💵 cobro esperado<br>Rojo: ≤3 días o vencido · Ámbar: ≤10 días · Verde: listo / te depositan · Azul: hoy</div></div>`;
 }
 
 // Arma el correo. Devuelve null si no hay nada que avisar.
-export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { hoy, dow, slot }) {
-  const calHtml = slot === 'am' ? calendarioHtml({ pagos, rend, cup, cobrar }, hoy) + (hoy.getDate() >= 25 ? calendarioHtml({ pagos, rend, cup, cobrar }, hoy, addMonths(ymKey(hoy), 1)) : '') : '';
+export const AVISOS_CANCELAR = [7, 5, 3, 2, 1, 0];   // días antes del límite en que se manda correo (los últimos 2 días también en la noche)
+export const pendienteCancelar = x => x.estado !== 'cancelada' && x.estado !== 'recurrente' && !!x.limite;
+export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [], cancelar = [] }, { hoy, dow, slot }) {
+  const calHtml = slot === 'am' ? calendarioHtml({ pagos, rend, cup, cobrar, cancelar }, hoy) + (hoy.getDate() >= 25 ? calendarioHtml({ pagos, rend, cup, cobrar, cancelar }, hoy, addMonths(ymKey(hoy), 1)) : '') : '';
   const diasAlLunes = dow === 4 ? 4 : dow === 5 ? 3 : 0;   // jueves/viernes: adelantar fin de semana y lunes
   const items = []; // {n: 0 rojo | 1 ámbar | 2 gris, t: texto, orden}
   const cuandoPago = (c, p) => {
@@ -193,6 +196,11 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
       items.push({ n: 1, orden: 90 - dias, sec: 'Por cobrar (más de 7 días abierto)', t: `${esc(x.concepto)}${x.deQuien ? ' — ' + esc(x.deQuien) : ''}${x.monto ? ' · ' + MXN(x.monto) : ''} · ${dias} días${x.nota ? '<br><i style="color:#666">' + esc(String(x.nota).slice(0, 160)) + '</i>' : ''}` });
     }
   }
+  for (const x of cancelar.filter(pendienteCancelar)) {
+    const dd = diffDays(parse(x.limite), hoy);
+    const toca = dd < 0 ? slot === 'am' : (AVISOS_CANCELAR.includes(dd) && (slot === 'am' || dd <= 1));
+    if (toca) items.push({ n: dd <= 2 ? 0 : 1, orden: dd < 0 ? 1 : 2 + dd, sec: '✂️ Cancela antes de que te cobren', t: `${esc(x.nombre)}${x.monto ? ' (' + MXN(x.monto) + ')' : ''} — ${dd < 0 ? 'YA PASÓ la fecha límite (' + fmtFecha(parse(x.limite)) + '): ¿cancelaste?' : dd === 0 ? 'último día HOY' : 'te quedan ' + dd + ' día(s) (hasta el ' + fmtFecha(parse(x.limite)) + ')'}${x.donde ? '. Cancela en: ' + esc(x.donde) : ''}` });
+  }
   if (slot === 'am') {
     // Calendario en el correo: día de empezar rendimientos, cobros esperados y agenda de 7 días.
     const ventana = Math.max(diasAlLunes, 0);
@@ -225,6 +233,7 @@ export function armarAviso({ pagos = [], rend = [], cup = [], cobrar = [] }, { h
         for (const k of [-1, 0]) { const mk = addMonths(ymKey(f), k); if (mk >= ESTADOS_DESDE && !(p.estados || []).includes(mk) && ymd(revisionDe(p, mk)) === fk) ag.push({ d, t: `${et} · 📄 ${esc(p.nombre)}: revisar estado de cuenta` }); }
       }
       for (const c of cup) if (!c.usado && c.vence === fk) ag.push({ d, t: `${et} · ${esBeneficio(c) ? '🛡 vence/renueva' : '🎟 vence'} ${esc(c.nombre)}` });
+      for (const x of cancelar.filter(pendienteCancelar)) if (x.limite === fk) ag.push({ d, t: `${et} · ✂️ último día para cancelar ${esc(x.nombre)}` });
       for (const x of cobrar) if (x.estatus !== 'cobrado' && x.fechaEsperada === fk) ag.push({ d, t: `${et} · 💵 cobro esperado: ${esc(x.concepto)}` });
     }
     for (let d = 1; d <= 7; d++) {
